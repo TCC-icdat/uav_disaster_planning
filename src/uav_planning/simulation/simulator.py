@@ -229,14 +229,18 @@ class Simulator:
                 if record.completion_time <= current_time + _EPS:
                     self._store_history(runtime.history, record)
                     runtime.anchors[uav_id] = PlanningAnchor(
-                        uav_id, record.completion_time, tasks[task_id].pose
+                        uav_id,
+                        record.completion_time,
+                        self.execution_evaluator.task_completion_pose(tasks[task_id]),
                     )
                     consumed += 1
                     continue
                 if record.departure_time <= current_time + _EPS:
                     runtime.fixed_tasks[uav_id] = record
                     runtime.anchors[uav_id] = PlanningAnchor(
-                        uav_id, record.completion_time, tasks[task_id].pose
+                        uav_id,
+                        record.completion_time,
+                        self.execution_evaluator.task_completion_pose(tasks[task_id]),
                     )
                     consumed += 1
                     locked_now = True

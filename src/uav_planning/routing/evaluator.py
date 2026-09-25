@@ -62,6 +62,11 @@ class RouteEvaluator:
     def __init__(self, travel_time_provider: TravelTimeProvider) -> None:
         self.travel_time_provider = travel_time_provider
 
+    def task_completion_pose(self, task: Task) -> Pose2D:
+        """Return the pose occupied after service; point tasks stay in place."""
+
+        return task.pose
+
     def evaluate_route(
         self,
         uav: UAV,
@@ -94,7 +99,7 @@ class RouteEvaluator:
             total_travel += travel
             total_service += task.service_time
             time = completion
-            pose = task.pose
+            pose = self.task_completion_pose(task)
 
         return_travel = self.travel_time_provider.travel_time(uav, pose, uav.start_pose)
         total_travel += return_travel

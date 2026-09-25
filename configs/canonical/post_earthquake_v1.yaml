@@ -1,0 +1,55 @@
+scenario_id: post_earthquake_v1
+description: Post-earthquake township and urban rapid assessment canonical case
+
+map:
+  width_m: 6000
+  height_m: 6000
+  depot: {x_m: -500, y_m: 500, heading_deg: 0}
+
+eo:
+  count: 1
+  speed_mps: 35
+  min_turn_radius_m: 250
+  altitude_m: 600
+  camera_hfov_deg: 60
+  camera_vfov_deg: 45
+  cross_track_overlap: 0.20
+  sample_step_m: 10
+
+sar:
+  count: 3
+  speed_mps: 40
+  min_turn_radius_m: 250
+  max_mission_time_s: 3600
+  altitude_m: 800
+  incidence_angle_deg: 35
+  beamwidth_deg: 20
+  objective_mode: weighted_delay
+  affected_uav_count_h: 2
+  commitment_horizon: 0
+  local_search_max_iterations: 100
+  local_search_time_limit_sec: 0.1
+
+aois:
+  - {id: A01, semantic_type: Hospital, center_m: [1000, 4500], size_m: [240, 160], priority: 10, initially_known: true, orientation_deg: 0}
+  - {id: A02, semantic_type: School, center_m: [4700, 4800], size_m: [220, 160], priority: 8, initially_known: false, orientation_deg: 90}
+  - {id: A03, semantic_type: Bridge, center_m: [2900, 5200], size_m: [180, 120], priority: 8, initially_known: false, orientation_deg: 0}
+  - {id: A04, semantic_type: Residential damage, center_m: [1500, 3300], size_m: [300, 180], priority: 7, initially_known: false, orientation_deg: 0}
+  - {id: A05, semantic_type: Main-road junction, center_m: [4300, 3200], size_m: [180, 120], priority: 7, initially_known: true, orientation_deg: 90}
+  - {id: A06, semantic_type: Apartment block, center_m: [2800, 2800], size_m: [300, 200], priority: 6, initially_known: false, orientation_deg: 0}
+  - {id: A07, semantic_type: Emergency shelter, center_m: [800, 2000], size_m: [220, 150], priority: 9, initially_known: false, orientation_deg: 0}
+  - {id: A08, semantic_type: Industrial block, center_m: [5100, 2100], size_m: [300, 180], priority: 6, initially_known: false, orientation_deg: 0}
+  - {id: A09, semantic_type: Bridge, center_m: [3400, 1400], size_m: [180, 120], priority: 8, initially_known: false, orientation_deg: 90}
+  - {id: A10, semantic_type: Residential damage, center_m: [1800, 1200], size_m: [280, 180], priority: 5, initially_known: false, orientation_deg: 0}
+  - {id: A11, semantic_type: School, center_m: [4200, 900], size_m: [220, 150], priority: 8, initially_known: false, orientation_deg: 90}
+  - {id: A12, semantic_type: Clinic, center_m: [2500, 4000], size_m: [200, 140], priority: 9, initially_known: true, orientation_deg: 0}
+
+no_fly_zones:
+  safety_margin_m: 100
+  zones:
+    - id: NFZ1
+      polygon_m: [[2200, 3500], [3200, 3500], [3200, 4300], [2200, 4300]]
+    - id: NFZ2
+      polygon_m: [[3750, 1750], [4550, 1750], [4550, 2450], [3750, 2450]]
+    - id: NFZ3
+      polygon_m: [[900, 650], [1450, 650], [1450, 1400], [900, 1400]]
