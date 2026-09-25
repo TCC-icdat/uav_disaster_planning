@@ -24,6 +24,7 @@ class PlanEvaluation:
     objective: float
     weighted_delay: float
     total_travel_time: float
+    makespan: float
     route_evaluations: dict[int, RouteEvaluation]
     completion_times: dict[int, float]
 
@@ -49,7 +50,11 @@ class RouteOptimizer:
         local_search_time_limit_sec: float = 0.2,
         objective_mode: str = "weighted_delay",
     ) -> None:
-        if objective_mode not in {"weighted_delay", "total_travel_time"}:
+        if objective_mode not in {
+            "weighted_delay",
+            "total_travel_time",
+            "makespan",
+        }:
             raise ValueError("unsupported objective_mode")
         self.evaluator = evaluator
         self.local_search_max_iterations = local_search_max_iterations
@@ -96,6 +101,10 @@ class RouteOptimizer:
             evaluation.total_travel_time
             for evaluation in route_evaluations.values()
         )
+        makespan = max(
+            (evaluation.return_time for evaluation in route_evaluations.values()),
+            default=0.0,
+        )
         if not selected.issubset(completion_times):
             feasible = False
             objective = inf
@@ -104,18 +113,20 @@ class RouteOptimizer:
             weighted_delay_value = weighted_response_delay(
                 tasks, completion_times, selected
             )
-            objective = (
-                weighted_delay_value
-                if self.objective_mode == "weighted_delay"
-                else total_travel_time
-            )
+            if self.objective_mode == "weighted_delay":
+                objective = weighted_delay_value
+            elif self.objective_mode == "total_travel_time":
+                objective = total_travel_time
+            else:
+                objective = makespan
         return PlanEvaluation(
-            feasible,
-            objective,
-            weighted_delay_value,
-            total_travel_time,
-            route_evaluations,
-            completion_times,
+            feasible=feasible,
+            objective=objective,
+            weighted_delay=weighted_delay_value,
+            total_travel_time=total_travel_time,
+            makespan=makespan,
+            route_evaluations=route_evaluations,
+            completion_times=completion_times,
         )
 
     def optimize(

@@ -119,3 +119,85 @@ def test_weighted_delay_metric_is_still_reported_for_distance_baseline() -> None
     )
     assert result.metrics["objective_mode"] == "total_travel_time"
     assert result.metrics["weighted_delay"] > 0.0
+
+
+def test_formal_runtime_and_normalized_delay_metrics_are_reported() -> None:
+    scenario = _single_task_scenario()
+    optimizer = RouteOptimizer(RouteEvaluator(DubinsTravelTimeProvider()))
+    result = Simulator(scenario, InitialPlanner(optimizer), optimizer).run(
+        NoReorderInsertionPlanner(optimizer)
+    )
+    metrics = result.metrics
+    assert metrics["weighted_mean_delay"] == pytest.approx(
+        metrics["weighted_delay"] / scenario.initial_tasks[0].priority
+    )
+    assert metrics["initial_planning_runtime"] >= 0.0
+    assert metrics["total_algorithm_runtime"] == pytest.approx(
+        metrics["initial_planning_runtime"] + metrics["total_replanning_runtime"]
+    )
+
+
+def test_makespan_objective_equals_max_route_return_time() -> None:
+    uavs = {
+        1: UAV(1, 10.0, 2.0, 100.0, Pose2D(0.0, 0.0, 0.0)),
+        2: UAV(2, 10.0, 2.0, 100.0, Pose2D(0.0, 0.0, 0.0)),
+    }
+    tasks = {
+        1: Task(1, 10.0, 0.0, 0.0, 3.0, 2.0, 0.0),
+        2: Task(2, 30.0, 0.0, 0.0, 7.0, 1.0, 0.0),
+    }
+    plan = Plan({1: Route(1, [1]), 2: Route(2, [2])})
+    optimizer = RouteOptimizer(
+        RouteEvaluator(EuclideanTravelTimeProvider()),
+        objective_mode="makespan",
+    )
+    evaluation = optimizer.evaluate_plan(plan, uavs, tasks)
+    expected = max(
+        route.return_time for route in evaluation.route_evaluations.values()
+    )
+    assert evaluation.objective == pytest.approx(expected)
+    assert evaluation.makespan == pytest.approx(expected)
+
+
+def test_makespan_objective_does_not_use_priority_directly() -> None:
+    uav = UAV(1, 10.0, 2.0, 100.0, Pose2D(0.0, 0.0, 0.0))
+    low_priority = {1: Task(1, 10.0, 0.0, 0.0, 1.0, 2.0, 0.0)}
+    high_priority = {1: Task(1, 10.0, 0.0, 0.0, 100.0, 2.0, 0.0)}
+    plan = Plan({1: Route(1, [1])})
+    optimizer = RouteOptimizer(
+        RouteEvaluator(EuclideanTravelTimeProvider()),
+        objective_mode="makespan",
+    )
+    first = optimizer.evaluate_plan(plan, {1: uav}, low_priority)
+    second = optimizer.evaluate_plan(plan, {1: uav}, high_priority)
+    assert first.objective == pytest.approx(second.objective)
+    assert first.weighted_delay != second.weighted_delay
+
+
+def test_weighted_delay_metric_still_reported_under_makespan() -> None:
+    scenario = _single_task_scenario()
+    optimizer = RouteOptimizer(
+        RouteEvaluator(DubinsTravelTimeProvider()),
+        objective_mode="makespan",
+    )
+    result = Simulator(scenario, InitialPlanner(optimizer), optimizer).run(
+        NoReorderInsertionPlanner(optimizer)
+    )
+    assert result.metrics["objective_mode"] == "makespan"
+    assert result.metrics["weighted_delay"] > 0.0
+
+
+def test_active_uav_count_matches_execution_history() -> None:
+    scenario = _single_task_scenario()
+    optimizer = RouteOptimizer(RouteEvaluator(DubinsTravelTimeProvider()))
+    result = Simulator(scenario, InitialPlanner(optimizer), optimizer).run(
+        NoReorderInsertionPlanner(optimizer)
+    )
+    active = {record.uav_id for record in result.history.values()}
+    counts = [
+        sum(record.uav_id == uav_id for record in result.history.values())
+        for uav_id in active
+    ]
+    assert result.metrics["active_uav_count"] == len(active)
+    assert result.metrics["max_tasks_per_uav"] == max(counts)
+    assert result.metrics["min_tasks_per_active_uav"] == min(counts)

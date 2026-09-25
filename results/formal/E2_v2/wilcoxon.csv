@@ -1,0 +1,5 @@
+comparison,metric,n,wilcoxon_statistic,p_value_two_sided,mean_time_aware,mean_mission_completion,mean_difference,mean_relative_difference_percent,wins_time_aware_lower,ties,losses_time_aware_higher
+time_aware_vs_mission_completion,weighted_mean_delay,30,0.0,1.862645149230957e-09,19.21712436897547,23.54021891329245,-4.323094544316978,-17.945120716910807,30,0,0
+time_aware_vs_mission_completion,high_priority_mean_delay,30,0.0,1.862645149230957e-09,16.26555230616254,23.499424784813602,-7.233872478651059,-29.385165090838584,30,0,0
+time_aware_vs_mission_completion,total_travel_time,30,110.0,0.010598260909318924,168.15414948847103,163.64161966630817,4.51252982216281,2.9609054446962007,8,0,22
+time_aware_vs_mission_completion,makespan,30,111.0,0.011303061619400978,88.12530336513687,85.69879729014146,2.4265060749954075,2.9835432052168094,10,0,20

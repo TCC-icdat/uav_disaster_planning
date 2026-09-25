@@ -89,9 +89,11 @@ class Simulator:
         """Run one dynamic policy without allowing replanning into the past."""
 
         released = {task.task_id: task for task in self.scenario.initial_tasks}
+        initial_started = perf_counter()
         initial_plan = self.initial_planner.plan(
             list(self.scenario.uavs), list(self.scenario.initial_tasks), current_time=0.0
         )
+        initial_planning_runtime = perf_counter() - initial_started
         runtime = _RuntimeState(
             plan=initial_plan.copy(),
             anchors={
@@ -174,6 +176,7 @@ class Simulator:
             final_return_times,
             records,
             time_consistent,
+            initial_planning_runtime,
         )
         return SimulationResult(
             metrics=metrics,
@@ -486,6 +489,7 @@ class Simulator:
         final_return_times: dict[int, float],
         records: list[ReplanningRecord],
         time_consistent: bool,
+        initial_planning_runtime: float,
     ) -> dict[str, float | int | str | bool]:
         completion = {
             task_id: record.completion_time
@@ -509,6 +513,18 @@ class Simulator:
             final_return_times[uav_id] <= self.uavs[uav_id].max_mission_time + _EPS
             for uav_id in self.uavs
         )
+        weighted_delay = weighted_response_delay(tasks, completion)
+        priority_sum = sum(task.priority for task in tasks.values())
+        total_replanning_runtime = sum(runtimes)
+        task_counts_by_uav = {
+            uav_id: sum(
+                record.uav_id == uav_id for record in runtime.history.values()
+            )
+            for uav_id in self.uavs
+        }
+        active_task_counts = [
+            count for count in task_counts_by_uav.values() if count > 0
+        ]
         return {
             "seed": self.scenario.seed,
             "strategy": strategy,
@@ -518,19 +534,27 @@ class Simulator:
             "objective_mode": self.optimizer.objective_mode,
             "task_count": len(tasks),
             "uav_count": len(self.uavs),
-            "weighted_delay": weighted_response_delay(tasks, completion),
+            "weighted_delay": weighted_delay,
+            "weighted_mean_delay": weighted_delay / priority_sum if priority_sum else 0.0,
             "mean_delay": sum(delays.values()) / len(delays),
             "high_priority_mean_delay": sum(high) / len(high) if high else 0.0,
-            "makespan": max(completion.values(), default=0.0),
+            "makespan": max(final_return_times.values(), default=0.0),
             "total_travel_time": sum(
                 record.travel_time for record in runtime.history.values()
             )
             + sum(record.travel_time for record in runtime.return_history),
             "total_service_time": sum(task.service_time for task in tasks.values()),
+            "active_uav_count": len(active_task_counts),
+            "max_tasks_per_uav": max(task_counts_by_uav.values(), default=0),
+            "min_tasks_per_active_uav": min(active_task_counts, default=0),
             "replanning_count": len(records),
-            "total_replanning_runtime": sum(runtimes),
+            "initial_planning_runtime": initial_planning_runtime,
+            "total_replanning_runtime": total_replanning_runtime,
             "mean_replanning_runtime": sum(runtimes) / len(runtimes) if runtimes else 0.0,
             "max_replanning_runtime": max(runtimes, default=0.0),
+            "total_algorithm_runtime": (
+                initial_planning_runtime + total_replanning_runtime
+            ),
             "assignment_changes": sum(item.assignment_changes for item in records),
             "successor_edge_changes": sum(
                 item.successor_edge_changes for item in records

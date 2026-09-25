@@ -1,8 +1,9 @@
 # Experiment configuration freeze
 
-These files define the first formal experiment matrix. Only E1 small-scale
-enumeration has been run. E2-E4 have received 3-seed pipeline checks; E5 must
-not be run until its seed count and resource budget are approved.
+These files define the frozen formal experiment matrix. E1, E3, and E4 are
+accepted formal results. The original E2 distance-only comparison is retained
+as a structural supplement, while E2_v2 uses mission-completion makespan as
+the main baseline. E5 remains frozen and must not be run before approval.
 
 Required raw-result identity columns:
 
@@ -22,15 +23,22 @@ Required outcome columns:
 
 ```text
 weighted_delay
+weighted_mean_delay
 mean_delay
 high_priority_mean_delay
 makespan
 total_travel_time
 total_service_time
+active_uav_count
+max_tasks_per_uav
+min_tasks_per_active_uav
+initial_planning_runtime
 replanning_count
 total_replanning_runtime
 mean_replanning_runtime
 max_replanning_runtime
+total_algorithm_runtime
+runner_wall_runtime
 assignment_changes
 successor_edge_changes
 time_consistency_check

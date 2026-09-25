@@ -128,9 +128,14 @@ def load_config(path: str | Path) -> ExperimentConfig:
     ):
         if model not in {"dubins", "euclidean"}:
             raise ValueError(f"{field_name} must be 'dubins' or 'euclidean'")
-    if config.objective_mode not in {"weighted_delay", "total_travel_time"}:
+    if config.objective_mode not in {
+        "weighted_delay",
+        "total_travel_time",
+        "makespan",
+    }:
         raise ValueError(
-            "objective_mode must be 'weighted_delay' or 'total_travel_time'"
+            "objective_mode must be 'weighted_delay', 'total_travel_time', "
+            "or 'makespan'"
         )
     if config.planner.commitment_horizon != 0:
         raise ValueError("MVP core comparison requires commitment_horizon = 0")
