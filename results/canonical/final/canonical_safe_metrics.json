@@ -1,0 +1,62 @@
+{
+  "scenario_id": "post_earthquake_v1",
+  "initial_aoi_provenance": {
+    "initial_aoi_ids": [
+      "A01",
+      "A05",
+      "A12"
+    ],
+    "sources": [
+      "satellite_remote_sensing",
+      "historical_geographic_information",
+      "ground_emergency_reports"
+    ],
+    "satellite_role": "macro_situation_and_initial_priority_area_input_only",
+    "satellite_simulation_enabled": false
+  },
+  "satellite_simulation_added": false,
+  "eo_path_length_before": 74921.92926891378,
+  "eo_path_length_after": 86907.00915374653,
+  "eo_detour_ratio": 1.159967582279085,
+  "eo_detour_increase_percent": 15.996758227908492,
+  "eo_detoured_legs": [
+    "EO_LANE_02",
+    "EO_LANE_03",
+    "EO_LANE_04",
+    "EO_LANE_07",
+    "EO_LANE_08"
+  ],
+  "sar_total_travel_time_before": 2799.02730445288,
+  "sar_total_travel_time": 2848.067987150921,
+  "sar_travel_time_increase_percent": 1.7520616044017778,
+  "weighted_delay": 12452.278592646278,
+  "weighted_mean_delay": 136.83822629281624,
+  "makespan": 2526.9289412366397,
+  "eo_nfz_intersections_before": 5,
+  "eo_nfz_intersections_after": 0,
+  "sar_nfz_intersections_before": 19,
+  "sar_nfz_intersections_after": 0,
+  "service_modes_switched_count": 4,
+  "service_modes_switched_aois": [
+    "A07",
+    "A09",
+    "A10",
+    "A12"
+  ],
+  "completed_aoi_count": 12,
+  "replanning_count": 9,
+  "assignment_changes": 0,
+  "successor_edge_changes": 0,
+  "time_consistency_check": true,
+  "feasible": true,
+  "max_mission_time_s": 3600.0,
+  "nfz_rerouting_enabled": true,
+  "replanning_snapshot": {
+    "release_time_s": 2200.4973359172564,
+    "new_task_id": 3,
+    "new_aoi_id": "A03",
+    "affected_uav_id": 1,
+    "executing_task_id": 2,
+    "insertion_position_in_future_suffix": 1
+  }
+}

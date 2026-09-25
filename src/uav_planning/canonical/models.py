@@ -114,6 +114,22 @@ class SARConfig:
 
 
 @dataclass(frozen=True)
+class ObstaclePlannerConfig:
+    sample_step_m: float
+    waypoint_clearance_m: float
+    waypoint_heading_count: int
+    eo_detour_approach_m: float
+
+
+@dataclass(frozen=True)
+class InitialInformationConfig:
+    initial_aoi_ids: tuple[str, ...]
+    sources: tuple[str, ...]
+    satellite_role: str
+    satellite_simulation_enabled: bool
+
+
+@dataclass(frozen=True)
 class NoFlyZone:
     zone_id: str
     polygon: tuple[tuple[float, float], ...]
@@ -140,6 +156,8 @@ class CanonicalScenario:
     depot: Pose2D
     eo: EOConfig
     sar: SARConfig
+    obstacle_planner: ObstaclePlannerConfig
+    initial_information: InitialInformationConfig
     aois: tuple[SemanticAOI, ...]
     no_fly_zones: tuple[NoFlyZone, ...]
 
@@ -162,6 +180,7 @@ class EOSweepPlan:
     lane_count: int
     lane_spacing_m: float
     footprint: SensorFootprint
+    detoured_leg_ids: tuple[str, ...] = ()
 
     @property
     def path_length_m(self) -> float:
@@ -195,6 +214,17 @@ class SARServiceGeometry:
     outer_ground_range_m: float
     swath_polygon: tuple[tuple[float, float], ...]
     aoi_fits: bool
+    selected_service_mode: str = "A"
+    default_mode_collision: bool = False
+    mirror_mode_collision: bool = False
+
+
+@dataclass(frozen=True)
+class ObstacleAwarePath:
+    samples: np.ndarray
+    length_m: float
+    detoured: bool
+    waypoint_count: int
 
 
 @dataclass(frozen=True)

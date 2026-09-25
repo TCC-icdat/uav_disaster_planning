@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from math import cos, radians, sin, tan
+from dataclasses import replace
+from math import cos, pi, radians, sin, tan
+
+import numpy as np
 
 from uav_planning.canonical.models import (
     CanonicalScenario,
     EOReleaseEvent,
     SARServiceGeometry,
 )
+from uav_planning.canonical.obstacle import polyline_intersects_zones
 from uav_planning.models import Pose2D, Task, UAV
 from uav_planning.routing.evaluator import RouteEvaluator, TravelTimeProvider
 from uav_planning.scenario.generator import Scenario
@@ -24,65 +28,125 @@ def _sar_ranges(scenario: CanonicalScenario) -> tuple[float, float, float, float
     return inner, outer, outer - inner, nominal
 
 
+def _build_service_mode(
+    scenario: CanonicalScenario,
+    aoi,
+    mode: str,
+) -> SARServiceGeometry:
+    inner, outer, swath_width, nominal = _sar_ranges(scenario)
+    heading = aoi.orientation_rad if mode == "A" else aoi.orientation_rad + pi
+    tangent = (cos(heading), sin(heading))
+    normal = (-sin(heading), cos(heading))
+    scan_length = max(aoi.length_m + 300.0, 600.0)
+    line_center = (
+        aoi.center[0] - nominal * normal[0],
+        aoi.center[1] - nominal * normal[1],
+    )
+    entry = Pose2D(
+        line_center[0] - scan_length / 2.0 * tangent[0],
+        line_center[1] - scan_length / 2.0 * tangent[1],
+        heading,
+    )
+    exit_pose = Pose2D(
+        line_center[0] + scan_length / 2.0 * tangent[0],
+        line_center[1] + scan_length / 2.0 * tangent[1],
+        heading,
+    )
+    swath_polygon = (
+        (entry.x + inner * normal[0], entry.y + inner * normal[1]),
+        (exit_pose.x + inner * normal[0], exit_pose.y + inner * normal[1]),
+        (exit_pose.x + outer * normal[0], exit_pose.y + outer * normal[1]),
+        (entry.x + outer * normal[0], entry.y + outer * normal[1]),
+    )
+    fits = all(
+        -1e-9
+        <= (x - entry.x) * tangent[0] + (y - entry.y) * tangent[1]
+        <= scan_length + 1e-9
+        and inner - 1e-9
+        <= (x - entry.x) * normal[0] + (y - entry.y) * normal[1]
+        <= outer + 1e-9
+        for x, y in aoi.polygon
+    )
+    return SARServiceGeometry(
+        aoi_id=aoi.aoi_id,
+        task_id=aoi.task_id,
+        entry_pose=entry,
+        exit_pose=exit_pose,
+        scan_length_m=scan_length,
+        service_time_s=scan_length / scenario.sar.speed_mps,
+        scan_heading_rad=heading,
+        swath_width_m=swath_width,
+        nominal_standoff_m=nominal,
+        inner_ground_range_m=inner,
+        outer_ground_range_m=outer,
+        swath_polygon=swath_polygon,
+        aoi_fits=fits,
+        selected_service_mode=mode,
+    )
+
+
+def build_sar_service_mode_candidates(
+    scenario: CanonicalScenario,
+) -> dict[int, tuple[SARServiceGeometry, SARServiceGeometry]]:
+    candidates = {}
+    for aoi in scenario.aois:
+        mode_a = _build_service_mode(scenario, aoi, "A")
+        mode_b = _build_service_mode(scenario, aoi, "B")
+        if not mode_a.aoi_fits or not mode_b.aoi_fits:
+            raise ValueError(
+                f"AOI {aoi.aoi_id} does not fit both left-looking SAR modes"
+            )
+        mode_a_samples = np.asarray(
+            [
+                (mode_a.entry_pose.x, mode_a.entry_pose.y),
+                (mode_a.exit_pose.x, mode_a.exit_pose.y),
+            ],
+            dtype=float,
+        )
+        mode_b_samples = np.asarray(
+            [
+                (mode_b.entry_pose.x, mode_b.entry_pose.y),
+                (mode_b.exit_pose.x, mode_b.exit_pose.y),
+            ],
+            dtype=float,
+        )
+        default_collision = polyline_intersects_zones(
+            mode_a_samples, scenario.no_fly_zones
+        )
+        mirror_collision = polyline_intersects_zones(
+            mode_b_samples, scenario.no_fly_zones
+        )
+        candidates[aoi.task_id] = (
+            replace(
+                mode_a,
+                default_mode_collision=default_collision,
+                mirror_mode_collision=mirror_collision,
+            ),
+            replace(
+                mode_b,
+                default_mode_collision=default_collision,
+                mirror_mode_collision=mirror_collision,
+            ),
+        )
+    return candidates
+
+
 def build_sar_service_geometries(
     scenario: CanonicalScenario,
 ) -> dict[int, SARServiceGeometry]:
-    inner, outer, swath_width, nominal = _sar_ranges(scenario)
     geometries: dict[int, SARServiceGeometry] = {}
-    for aoi in scenario.aois:
-        heading = aoi.orientation_rad
-        tangent = (cos(heading), sin(heading))
-        normal = (-sin(heading), cos(heading))
-        scan_length = max(aoi.length_m + 300.0, 600.0)
-        line_center = (
-            aoi.center[0] - nominal * normal[0],
-            aoi.center[1] - nominal * normal[1],
-        )
-        entry = Pose2D(
-            line_center[0] - scan_length / 2.0 * tangent[0],
-            line_center[1] - scan_length / 2.0 * tangent[1],
-            heading,
-        )
-        exit_pose = Pose2D(
-            line_center[0] + scan_length / 2.0 * tangent[0],
-            line_center[1] + scan_length / 2.0 * tangent[1],
-            heading,
-        )
-        swath_polygon = (
-            (entry.x + inner * normal[0], entry.y + inner * normal[1]),
-            (exit_pose.x + inner * normal[0], exit_pose.y + inner * normal[1]),
-            (exit_pose.x + outer * normal[0], exit_pose.y + outer * normal[1]),
-            (entry.x + outer * normal[0], entry.y + outer * normal[1]),
-        )
-        fits = all(
-            -1e-9
-            <= (x - entry.x) * tangent[0] + (y - entry.y) * tangent[1]
-            <= scan_length + 1e-9
-            and inner - 1e-9
-            <= (x - entry.x) * normal[0] + (y - entry.y) * normal[1]
-            <= outer + 1e-9
-            for x, y in aoi.polygon
-        )
-        geometry = SARServiceGeometry(
-            aoi_id=aoi.aoi_id,
-            task_id=aoi.task_id,
-            entry_pose=entry,
-            exit_pose=exit_pose,
-            scan_length_m=scan_length,
-            service_time_s=scan_length / scenario.sar.speed_mps,
-            scan_heading_rad=heading,
-            swath_width_m=swath_width,
-            nominal_standoff_m=nominal,
-            inner_ground_range_m=inner,
-            outer_ground_range_m=outer,
-            swath_polygon=swath_polygon,
-            aoi_fits=fits,
-        )
-        if not fits:
+    for task_id, (mode_a, mode_b) in build_sar_service_mode_candidates(
+        scenario
+    ).items():
+        if not mode_a.default_mode_collision:
+            selected = mode_a
+        elif not mode_b.mirror_mode_collision:
+            selected = mode_b
+        else:
             raise ValueError(
-                f"AOI {aoi.aoi_id} does not fit its frozen single SAR swath"
+                f"AOI {mode_a.aoi_id} has no NFZ-safe left-looking SAR mode"
             )
-        geometries[aoi.task_id] = geometry
+        geometries[task_id] = selected
     return geometries
 
 
@@ -128,7 +192,9 @@ class CanonicalTaskAdapter:
                     priority=aoi.priority,
                     service_time=service.service_time_s,
                     required_heading=service.entry_pose.heading,
-                    source="INITIAL" if aoi.initially_known else "EO",
+                    source=(
+                        "MULTI_SOURCE_PRIOR" if aoi.initially_known else "EO"
+                    ),
                 )
             )
         return tuple(tasks)

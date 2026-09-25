@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from math import pi, radians, tan
+from math import cos, pi, radians, tan
 
 import numpy as np
 
@@ -12,6 +12,11 @@ from uav_planning.canonical.models import (
     EOSweepLeg,
     EOSweepPlan,
     SensorFootprint,
+)
+from uav_planning.canonical.obstacle import (
+    ObstacleAwareDubinsPlanner,
+    polyline_polygon_first_intersection,
+    polyline_intersects_zones,
 )
 from uav_planning.geometry.dubins import sample_dubins_path
 from uav_planning.models import Pose2D
@@ -193,3 +198,123 @@ class EOEventGenerator:
         if hidden_count != 9:
             raise AssertionError("canonical EO chain must release exactly 9 hidden AOIs")
         return tuple(sorted(events, key=lambda event: (event.release_time, event.task_id)))
+
+
+class SafeEOSweepPlanner:
+    """Preserve the frozen lane layout and detour only colliding EO legs."""
+
+    def __init__(
+        self,
+        scenario: CanonicalScenario,
+        obstacle_planner: ObstacleAwareDubinsPlanner,
+    ) -> None:
+        self.scenario = scenario
+        self.obstacle_planner = obstacle_planner
+
+    def plan(self) -> EOSweepPlan:
+        original = EOSweepPlanner(self.scenario).plan()
+        sample_parts = [original.samples[:1].copy()]
+        legs: list[EOSweepLeg] = []
+        detoured: list[str] = []
+        current_index = 0
+        for leg in original.legs:
+            original_samples = original.samples[leg.start_index : leg.end_index + 1]
+            if polyline_intersects_zones(
+                original_samples, self.scenario.no_fly_zones
+            ):
+                samples = self._detour_leg(leg, original_samples)
+                detoured.append(leg.leg_id)
+            else:
+                samples = original_samples
+            start_index = current_index
+            if len(samples) > 1:
+                sample_parts.append(samples[1:])
+                current_index += len(samples) - 1
+            legs.append(
+                EOSweepLeg(
+                    leg_id=leg.leg_id,
+                    leg_type=leg.leg_type,
+                    start_index=start_index,
+                    end_index=current_index,
+                    from_pose=leg.from_pose,
+                    to_pose=leg.to_pose,
+                )
+            )
+        samples = np.vstack(sample_parts)
+        delta = np.diff(samples[:, :2], axis=0)
+        distances = np.hypot(delta[:, 0], delta[:, 1])
+        cumulative = np.concatenate(([0.0], np.cumsum(distances)))
+        safe = EOSweepPlan(
+            samples=samples,
+            cumulative_distance_m=cumulative,
+            legs=tuple(legs),
+            lane_count=original.lane_count,
+            lane_spacing_m=original.lane_spacing_m,
+            footprint=original.footprint,
+            detoured_leg_ids=tuple(detoured),
+        )
+        if polyline_intersects_zones(safe.samples, self.scenario.no_fly_zones):
+            raise RuntimeError("safe EO sweep failed final NFZ verification")
+        return safe
+
+    def _detour_leg(
+        self, leg: EOSweepLeg, original_samples: np.ndarray
+    ) -> np.ndarray:
+        colliding_zones = [
+            zone
+            for zone in self.scenario.no_fly_zones
+            if polyline_polygon_first_intersection(
+                original_samples, zone.inflated_polygon
+            )
+            is not None
+        ]
+        if leg.leg_type != "sweep_lane":
+            return self.obstacle_planner.plan(
+                leg.from_pose,
+                leg.to_pose,
+                self.scenario.eo.min_turn_radius_m,
+            ).samples
+
+        eastbound = cos(leg.from_pose.heading) > 0.0
+        colliding_zones.sort(
+            key=lambda zone: min(point[0] for point in zone.inflated_polygon),
+            reverse=not eastbound,
+        )
+        approach = self.scenario.obstacle_planner.eo_detour_approach_m
+        current = leg.from_pose
+        parts: list[np.ndarray] = []
+
+        def append(samples: np.ndarray) -> None:
+            parts.append(samples if not parts else samples[1:])
+
+        for zone in colliding_zones:
+            xs = [point[0] for point in zone.inflated_polygon]
+            before_x = min(xs) - approach if eastbound else max(xs) + approach
+            after_x = max(xs) + approach if eastbound else min(xs) - approach
+            before = Pose2D(before_x, leg.from_pose.y, leg.from_pose.heading)
+            after = Pose2D(after_x, leg.from_pose.y, leg.from_pose.heading)
+            append(
+                sample_dubins_path(
+                    current,
+                    before,
+                    self.scenario.eo.min_turn_radius_m,
+                    step_size=self.scenario.eo.sample_step_m,
+                )
+            )
+            append(
+                self.obstacle_planner.plan(
+                    before,
+                    after,
+                    self.scenario.eo.min_turn_radius_m,
+                ).samples
+            )
+            current = after
+        append(
+            sample_dubins_path(
+                current,
+                leg.to_pose,
+                self.scenario.eo.min_turn_radius_m,
+                step_size=self.scenario.eo.sample_step_m,
+            )
+        )
+        return np.vstack(parts)

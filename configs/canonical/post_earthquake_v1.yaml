@@ -1,6 +1,15 @@
 scenario_id: post_earthquake_v1
 description: Post-earthquake township and urban rapid assessment canonical case
 
+initial_information:
+  initial_aoi_ids: [A01, A05, A12]
+  sources:
+    - satellite_remote_sensing
+    - historical_geographic_information
+    - ground_emergency_reports
+  satellite_role: macro_situation_and_initial_priority_area_input_only
+  satellite_simulation_enabled: false
+
 map:
   width_m: 6000
   height_m: 6000
@@ -29,6 +38,12 @@ sar:
   commitment_horizon: 0
   local_search_max_iterations: 100
   local_search_time_limit_sec: 0.1
+
+obstacle_planner:
+  sample_step_m: 10
+  waypoint_clearance_m: 250
+  waypoint_heading_count: 4
+  eo_detour_approach_m: 250
 
 aois:
   - {id: A01, semantic_type: Hospital, center_m: [1000, 4500], size_m: [240, 160], priority: 10, initially_known: true, orientation_deg: 0}

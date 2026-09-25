@@ -10,7 +10,9 @@ from uav_planning.canonical.models import (
     CanonicalScenario,
     DEGREES_TO_RADIANS,
     EOConfig,
+    InitialInformationConfig,
     NoFlyZone,
+    ObstaclePlannerConfig,
     SARConfig,
     SemanticAOI,
 )
@@ -25,6 +27,8 @@ def load_canonical_scenario(path: str | Path) -> CanonicalScenario:
     depot_raw = map_raw["depot"]
     eo_raw = raw["eo"]
     sar_raw = raw["sar"]
+    obstacle_raw = raw["obstacle_planner"]
+    information_raw = raw["initial_information"]
     aois = tuple(
         SemanticAOI(
             aoi_id=str(item["id"]),
@@ -86,6 +90,20 @@ def load_canonical_scenario(path: str | Path) -> CanonicalScenario:
                 sar_raw["local_search_time_limit_sec"]
             ),
         ),
+        obstacle_planner=ObstaclePlannerConfig(
+            sample_step_m=float(obstacle_raw["sample_step_m"]),
+            waypoint_clearance_m=float(obstacle_raw["waypoint_clearance_m"]),
+            waypoint_heading_count=int(obstacle_raw["waypoint_heading_count"]),
+            eo_detour_approach_m=float(obstacle_raw["eo_detour_approach_m"]),
+        ),
+        initial_information=InitialInformationConfig(
+            initial_aoi_ids=tuple(map(str, information_raw["initial_aoi_ids"])),
+            sources=tuple(map(str, information_raw["sources"])),
+            satellite_role=str(information_raw["satellite_role"]),
+            satellite_simulation_enabled=bool(
+                information_raw["satellite_simulation_enabled"]
+            ),
+        ),
         aois=aois,
         no_fly_zones=zones,
     )
@@ -108,3 +126,19 @@ def _validate(scenario: CanonicalScenario) -> None:
         raise ValueError("canonical fleet must contain 1 EO and 3 SAR UAVs")
     if scenario.sar.commitment_horizon != 0:
         raise ValueError("canonical Local comparison requires commitment_horizon=0")
+    expected_initial = tuple(
+        aoi.aoi_id for aoi in scenario.aois if aoi.initially_known
+    )
+    if scenario.initial_information.initial_aoi_ids != expected_initial:
+        raise ValueError("initial information AOI ids must match initial AOIs")
+    if scenario.initial_information.satellite_simulation_enabled:
+        raise ValueError("satellite simulation is outside the canonical model")
+    obstacle = scenario.obstacle_planner
+    if (
+        obstacle.sample_step_m <= 0.0
+        or obstacle.waypoint_clearance_m <= 0.0
+        or obstacle.eo_detour_approach_m <= 0.0
+    ):
+        raise ValueError("obstacle planner distances must be positive")
+    if obstacle.waypoint_heading_count < 4:
+        raise ValueError("obstacle planner requires at least four headings")
