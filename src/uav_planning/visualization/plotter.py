@@ -9,14 +9,28 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from uav_planning.geometry.dubins import sample_dubins_path
 from uav_planning.models import Plan, Task, UAV
 
 
 def _route_xy(route, uav: UAV, tasks: dict[int, Task]):
-    xs = [uav.start_pose.x] + [tasks[task_id].x for task_id in route.task_ids]
-    ys = [uav.start_pose.y] + [tasks[task_id].y for task_id in route.task_ids]
-    xs.append(uav.start_pose.x)
-    ys.append(uav.start_pose.y)
+    pose = uav.start_pose
+    xs = [pose.x]
+    ys = [pose.y]
+    step_size = max(0.25, uav.min_turn_radius / 10.0)
+    for task_id in route.task_ids:
+        target = tasks[task_id].pose
+        path = sample_dubins_path(
+            pose, target, uav.min_turn_radius, step_size=step_size
+        )
+        xs.extend(path[1:, 0])
+        ys.extend(path[1:, 1])
+        pose = target
+    path = sample_dubins_path(
+        pose, uav.start_pose, uav.min_turn_radius, step_size=step_size
+    )
+    xs.extend(path[1:, 0])
+    ys.extend(path[1:, 1])
     return xs, ys
 
 
@@ -39,6 +53,8 @@ def plot_replanning_comparison(
     for axis, plan, title in zip(
         axes, (initial_plan, replanned_plan), ("Initial routes", "After replanning")
     ):
+        all_x = [0.0, width]
+        all_y = [0.0, height]
         axis.scatter([0.0], [0.0], marker="s", s=110, c="black", label="Depot")
         for task_id, task in tasks.items():
             marker = "*" if task_id in dynamic_task_ids else "o"
@@ -53,8 +69,17 @@ def plot_replanning_comparison(
             )
         for index, uav_id in enumerate(sorted(uavs)):
             xs, ys = _route_xy(plan.routes[uav_id], uavs[uav_id], tasks)
-            axis.plot(xs, ys, "--o", color=colors(index), label=f"SAR{uav_id}")
-        axis.set(xlim=(-2, width + 2), ylim=(-2, height + 2), title=title, xlabel="x", ylabel="y")
+            all_x.extend(xs)
+            all_y.extend(ys)
+            axis.plot(xs, ys, "-", linewidth=2.0, color=colors(index), label=f"SAR{uav_id}")
+        padding = max(width, height) * 0.04
+        axis.set(
+            xlim=(min(all_x) - padding, max(all_x) + padding),
+            ylim=(min(all_y) - padding, max(all_y) + padding),
+            title=title,
+            xlabel="x",
+            ylabel="y",
+        )
         axis.grid(alpha=0.25)
         axis.set_aspect("equal", adjustable="box")
         axis.legend(loc="best", fontsize=8)

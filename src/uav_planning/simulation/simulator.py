@@ -24,6 +24,7 @@ from uav_planning.models import (
 )
 from uav_planning.planners.initial_planner import InitialPlanner
 from uav_planning.routing.evaluator import RouteEvaluation
+from uav_planning.routing.evaluator import RouteEvaluator
 from uav_planning.routing.insertion import RouteOptimizer, empty_plan
 from uav_planning.scenario.event_generator import EventGenerator
 from uav_planning.scenario.generator import Scenario
@@ -71,12 +72,16 @@ class Simulator:
         self,
         scenario: Scenario,
         initial_planner: InitialPlanner,
-        optimizer: RouteOptimizer,
+        planning_optimizer: RouteOptimizer,
+        execution_evaluator: RouteEvaluator | None = None,
         high_priority_threshold: float = 7.0,
     ) -> None:
         self.scenario = scenario
         self.initial_planner = initial_planner
-        self.optimizer = optimizer
+        self.optimizer = planning_optimizer
+        self.execution_evaluator = (
+            execution_evaluator or planning_optimizer.evaluator
+        )
         self.high_priority_threshold = high_priority_threshold
         self.uavs = {uav.uav_id: uav for uav in scenario.uavs}
 
@@ -208,7 +213,7 @@ class Simulator:
 
             route_ids = list(runtime.plan.routes[uav_id].task_ids)
             anchor = runtime.anchors[uav_id]
-            evaluation = self.optimizer.evaluator.evaluate_route(
+            evaluation = self.execution_evaluator.evaluate_route(
                 uav,
                 [tasks[task_id] for task_id in route_ids],
                 start_time=anchor.time,
@@ -316,12 +321,18 @@ class Simulator:
         tasks: dict[int, Task],
         event_time: float,
     ) -> bool:
-        evaluation = self.optimizer.evaluate_plan(
-            plan, self.uavs, tasks, anchors=anchors
-        )
-        return evaluation.feasible and all(
+        evaluations = {
+            uav_id: self.execution_evaluator.evaluate_route(
+                self.uavs[uav_id],
+                [tasks[task_id] for task_id in plan.routes[uav_id].task_ids],
+                start_time=anchors[uav_id].time,
+                start_pose=anchors[uav_id].pose,
+            )
+            for uav_id in self.uavs
+        }
+        return all(
             start + _EPS >= event_time
-            for route in evaluation.route_evaluations.values()
+            for route in evaluations.values()
             for start in route.start_times.values()
         )
 
@@ -340,7 +351,7 @@ class Simulator:
                 runtime.return_history.append(returning)
             anchor = runtime.anchors[uav_id]
             route_ids = runtime.plan.routes[uav_id].task_ids
-            evaluation = self.optimizer.evaluator.evaluate_route(
+            evaluation = self.execution_evaluator.evaluate_route(
                 uav,
                 [tasks[task_id] for task_id in route_ids],
                 start_time=anchor.time,
@@ -502,6 +513,9 @@ class Simulator:
             "seed": self.scenario.seed,
             "strategy": strategy,
             "travel_model": self.optimizer.evaluator.travel_time_provider.name,
+            "planning_travel_model": self.optimizer.evaluator.travel_time_provider.name,
+            "execution_travel_model": self.execution_evaluator.travel_time_provider.name,
+            "objective_mode": self.optimizer.objective_mode,
             "task_count": len(tasks),
             "uav_count": len(self.uavs),
             "weighted_delay": weighted_response_delay(tasks, completion),

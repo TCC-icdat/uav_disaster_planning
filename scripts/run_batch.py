@@ -33,17 +33,20 @@ def main() -> None:
     for seed in args.seeds:
         config = replace(base_config, seed=seed)
         scenario = ScenarioGenerator(config).generate()
-        provider = DubinsTravelTimeProvider() if config.travel_model == "dubins" else EuclideanTravelTimeProvider()
+        planning_provider = DubinsTravelTimeProvider() if config.planning_travel_model == "dubins" else EuclideanTravelTimeProvider()
+        execution_provider = DubinsTravelTimeProvider() if config.execution_travel_model == "dubins" else EuclideanTravelTimeProvider()
         optimizer = RouteOptimizer(
-            RouteEvaluator(provider),
+            RouteEvaluator(planning_provider),
             config.planner.local_search_max_iterations,
             config.planner.local_search_time_limit_sec,
+            objective_mode=config.objective_mode,
         )
         simulator = Simulator(
             scenario,
             InitialPlanner(optimizer),
             optimizer,
-            config.high_priority_threshold,
+            execution_evaluator=RouteEvaluator(execution_provider),
+            high_priority_threshold=config.high_priority_threshold,
         )
         for strategy in (
             NoReorderInsertionPlanner(optimizer),

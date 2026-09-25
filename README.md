@@ -11,6 +11,8 @@
 - 动态策略为 `no_reorder`、`full` 和 `local`。
 - Full 与 Local 共用同一个 `RouteEvaluator` 和四个多邻域局部搜索算子。
 - 路线扰动只作为实验指标，不进入主目标。
+- 规划旅行模型与物理执行模型独立配置；真实执行历史始终由 execution model 推进。
+- 规划目标可切换为 `weighted_delay` 或仅用于对照的 `total_travel_time`。
 
 ## 工程结构
 
@@ -19,6 +21,8 @@ configs/                 YAML 参数
 src/uav_planning/        模型、几何、场景、路由、规划器、仿真、指标和绘图
 scripts/run_single.py    seed=42 三策略验收入口
 scripts/run_batch.py     小批量种子入口
+scripts/run_exact_benchmark.py  小规模精确枚举基准
+scripts/run_experiment_debugs.py E2/E3/E4 三种数据管线检查
 scripts/plot_results.py  结果柱状图
 tests/                   正确性、约束和锁定规则测试
 results/                 CSV、事件日志和路线图
@@ -45,6 +49,8 @@ python -m pip install -r requirements.txt
 ```bash
 pytest -q
 python scripts/run_single.py --config configs/small_debug.yaml
+python scripts/run_exact_benchmark.py
+python scripts/run_experiment_debugs.py
 ```
 
 输出包括：
@@ -54,6 +60,10 @@ python scripts/run_single.py --config configs/small_debug.yaml
 - `results/summary/seed42_summary.csv`
 - `results/summary/TIME_CONSISTENCY_CHECK.txt`
 - `results/figures/debug_seed42.png`
+- `results/exact/exact_benchmark_raw.csv`
+- `results/exact/exact_benchmark_summary.csv`
+- `results/debug/experiment_debug_raw.csv`
+- `results/debug/experiment_debug_summary.csv`
 
 `small_debug.yaml` 固定为 2 架 SAR、3 个初始任务、2 个动态任务、50 x 50 地图和 seed 42。动态释放区间刻意设置在初始航线执行期间，以实际触发锁定和重规划。
 
@@ -84,9 +94,25 @@ python scripts/run_batch.py --config configs/replanning_debug.yaml --seeds 40 41
 
 该诊断不是正式论文实验。
 
+## 实验前准备
+
+`ExactEnumerator` 穷举任务排列及向有标签 UAV 路线的弱组合切分，允许空路线，并统一调用现有计划评估器。它硬性限制为不超过 8 个任务、3 架 UAV，只用于正确性与 optimality-gap 基准。
+
+旅行模型配置明确分为：
+
+```yaml
+planning_travel_model: dubins   # 或 euclidean
+execution_travel_model: dubins  # 固定翼物理执行默认始终为 dubins
+objective_mode: weighted_delay  # 或 total_travel_time
+```
+
+因此 E3 的 `euclidean_planned` 含义是“用欧氏旅行时间规划，但按 Dubins 物理时间执行”，不是让固定翼按欧氏直线执行。无论采用哪种规划目标，输出指标都会统一报告真实执行历史上的 `weighted_delay`。
+
+正式实验模板位于 `configs/experiments/`：E1 精确基准、E2 时效目标、E3 旅行模型、E4 动态策略和 E5 规模模板。E5 标记为 `frozen_template_do_not_run`，本阶段未执行 20/50/100 规模。
+
 Dubins 公式采用标准六路径族解析构造。实现依据为 A. M. Shkel and V. Lumelsky, “Classification of the Dubins set,” *Robotics and Autonomous Systems*, 2001；代码为本项目独立的长度计算实现，未引入第三方 Dubins C 扩展。
 
 ## 结果解释边界
 
-Debug 图中的折线用于展示任务访问顺序；算法内部旅行时间仍由 Dubins 代价计算。当前阶段不包含图像识别、SAR 信号处理、真实飞控、障碍/天气/故障、通信模型、DRL、GA、ACO、Web 服务或数据库。
+Debug 图现使用与长度计算相同最短路径族的 Dubins 采样曲线。采样只服务于绘图，不参与优化。当前阶段不包含图像识别、SAR 信号处理、真实飞控、障碍/天气/故障、通信模型、DRL、GA、ACO、Web 服务或数据库。
 

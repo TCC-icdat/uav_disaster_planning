@@ -46,12 +46,20 @@ class PlannerConfig:
 @dataclass(frozen=True)
 class ExperimentConfig:
     seed: int
-    travel_model: str
+    planning_travel_model: str
+    execution_travel_model: str
+    objective_mode: str
     high_priority_threshold: float
     map: MapConfig
     uav: UAVConfig
     tasks: TaskConfig
     planner: PlannerConfig
+
+    @property
+    def travel_model(self) -> str:
+        """Backward-compatible alias for the planner's travel model."""
+
+        return self.planning_travel_model
 
 
 def _pair(values: list[Any]) -> tuple[Any, Any]:
@@ -72,7 +80,16 @@ def load_config(path: str | Path) -> ExperimentConfig:
     planner_raw = raw["local_replanning"]
     config = ExperimentConfig(
         seed=int(raw["seed"]),
-        travel_model=str(raw.get("travel_model", "dubins")),
+        planning_travel_model=str(
+            raw.get("planning_travel_model", raw.get("travel_model", "dubins"))
+        ),
+        execution_travel_model=str(
+            raw.get(
+                "execution_travel_model",
+                raw.get("travel_model", "dubins"),
+            )
+        ),
+        objective_mode=str(raw.get("objective_mode", "weighted_delay")),
         high_priority_threshold=float(raw.get("high_priority_threshold", 7.0)),
         map=MapConfig(
             width=float(map_raw["width"]),
@@ -105,8 +122,16 @@ def load_config(path: str | Path) -> ExperimentConfig:
             ),
         ),
     )
-    if config.travel_model not in {"dubins", "euclidean"}:
-        raise ValueError("travel_model must be 'dubins' or 'euclidean'")
+    for field_name, model in (
+        ("planning_travel_model", config.planning_travel_model),
+        ("execution_travel_model", config.execution_travel_model),
+    ):
+        if model not in {"dubins", "euclidean"}:
+            raise ValueError(f"{field_name} must be 'dubins' or 'euclidean'")
+    if config.objective_mode not in {"weighted_delay", "total_travel_time"}:
+        raise ValueError(
+            "objective_mode must be 'weighted_delay' or 'total_travel_time'"
+        )
     if config.planner.commitment_horizon != 0:
         raise ValueError("MVP core comparison requires commitment_horizon = 0")
     return config

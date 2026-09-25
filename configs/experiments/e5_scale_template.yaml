@@ -1,33 +1,26 @@
+experiment:
+  id: E5
+  name: scale
+  task_counts: [20, 50, 100]
+  uav_counts: [3, 5, 8]
+  seeds: null
+  status: frozen_template_do_not_run
+
 seed: 42
 planning_travel_model: dubins
 execution_travel_model: dubins
 objective_mode: weighted_delay
 high_priority_threshold: 7
-
-map:
-  width: 100.0
-  height: 100.0
-  depot:
-    x: 0.0
-    y: 0.0
-    heading: 0.0
-
-sar_uav:
-  count: 3
-  speed: 10.0
-  min_turn_radius: 5.0
-  max_mission_time: 500.0
-
+map: {width: 100.0, height: 100.0, depot: {x: 0.0, y: 0.0, heading: 0.0}}
+sar_uav: {count: 3, speed: 10.0, min_turn_radius: 5.0, max_mission_time: 500.0}
 tasks:
-  initial_count: 5
-  dynamic_count: 5
+  initial_count: 10
+  dynamic_count: 10
   priority_range: [1, 10]
   service_time_range: [2.0, 6.0]
   release_time_range: [10.0, 100.0]
-
 local_replanning:
   affected_uav_count_h: 2
   commitment_horizon: 0
   local_search_max_iterations: 100
   local_search_time_limit_sec: 0.2
-

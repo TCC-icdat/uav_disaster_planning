@@ -23,7 +23,10 @@ def completed_run():
         config.planner.local_search_time_limit_sec,
     )
     result = Simulator(
-        scenario, InitialPlanner(optimizer), optimizer, config.high_priority_threshold
+        scenario,
+        InitialPlanner(optimizer),
+        optimizer,
+        high_priority_threshold=config.high_priority_threshold,
     ).run(LocalReplanner(optimizer, config.planner.affected_uav_count_h))
     return scenario, optimizer, result
 

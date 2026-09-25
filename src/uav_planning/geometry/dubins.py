@@ -3,13 +3,15 @@
 The six normalized word formulas follow the standard Dubins construction
 described by Shkel and Lumelsky (2001), "Classification of the Dubins set".
 Only path length is required by the optimizer, so no external geometry library
-is needed.
+is needed. Sampling uses the same selected word and is visualization-only.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from math import acos, atan2, cos, hypot, isfinite, pi, sin, sqrt
+
+import numpy as np
 
 from uav_planning.models import Pose2D
 
@@ -112,14 +114,40 @@ def _lrl(alpha: float, beta: float, distance: float) -> _Word:
     return t, p, _mod2pi(beta - alpha - t + p)
 
 
-_WORDS: tuple[Callable[[float, float, float], _Word], ...] = (
-    _lsl,
-    _rsr,
-    _lsr,
-    _rsl,
-    _rlr,
-    _lrl,
+_WORDS: tuple[tuple[str, Callable[[float, float, float], _Word]], ...] = (
+    ("LSL", _lsl),
+    ("RSR", _rsr),
+    ("LSR", _lsr),
+    ("RSL", _rsl),
+    ("RLR", _rlr),
+    ("LRL", _lrl),
 )
+
+
+def _shortest_word(
+    start: Pose2D, goal: Pose2D, turning_radius: float
+) -> tuple[str, tuple[float, float, float]]:
+    if not isfinite(turning_radius) or turning_radius <= 0.0:
+        raise ValueError("turning_radius must be finite and positive")
+    dx = goal.x - start.x
+    dy = goal.y - start.y
+    euclidean = hypot(dx, dy)
+    heading_error = abs((_mod2pi(goal.heading - start.heading + pi)) - pi)
+    if euclidean <= _EPS and heading_error <= _EPS:
+        return "SSS", (0.0, 0.0, 0.0)
+    theta = _mod2pi(atan2(dy, dx))
+    alpha = _mod2pi(start.heading - theta)
+    beta = _mod2pi(goal.heading - theta)
+    normalized_distance = euclidean / turning_radius
+    candidates = [
+        (sum(word), name, word)
+        for name, solver in _WORDS
+        if (word := solver(alpha, beta, normalized_distance)) is not None
+    ]
+    if not candidates:
+        raise RuntimeError("no finite Dubins path found")
+    _, name, word = min(candidates, key=lambda item: item[0])
+    return name, word
 
 
 def dubins_shortest_path_length(
@@ -135,26 +163,64 @@ def dubins_shortest_path_length(
         turning_radius: Positive minimum turning radius.
     """
 
-    if not isfinite(turning_radius) or turning_radius <= 0.0:
-        raise ValueError("turning_radius must be finite and positive")
-    dx = goal.x - start.x
-    dy = goal.y - start.y
-    euclidean = hypot(dx, dy)
-    heading_error = abs((_mod2pi(goal.heading - start.heading + pi)) - pi)
-    if euclidean <= _EPS and heading_error <= _EPS:
-        return 0.0
+    _, parameters = _shortest_word(start, goal, turning_radius)
+    return sum(parameters) * turning_radius
 
-    theta = _mod2pi(atan2(dy, dx))
-    alpha = _mod2pi(start.heading - theta)
-    beta = _mod2pi(goal.heading - theta)
-    normalized_distance = euclidean / turning_radius
 
-    candidates = [
-        sum(word)
-        for solver in _WORDS
-        if (word := solver(alpha, beta, normalized_distance)) is not None
-    ]
-    if not candidates:
-        raise RuntimeError("no finite Dubins path found")
-    return min(candidates) * turning_radius
+def _advance_segment(
+    x: float,
+    y: float,
+    heading: float,
+    segment_type: str,
+    distance: float,
+    radius: float,
+) -> tuple[float, float, float]:
+    if segment_type == "S":
+        return (
+            x + distance * cos(heading),
+            y + distance * sin(heading),
+            heading,
+        )
+    angle = distance / radius
+    if segment_type == "L":
+        new_heading = heading + angle
+        return (
+            x + radius * (sin(new_heading) - sin(heading)),
+            y + radius * (cos(heading) - cos(new_heading)),
+            _mod2pi(new_heading),
+        )
+    if segment_type == "R":
+        new_heading = heading - angle
+        return (
+            x + radius * (sin(heading) - sin(new_heading)),
+            y + radius * (cos(new_heading) - cos(heading)),
+            _mod2pi(new_heading),
+        )
+    raise ValueError(f"unknown Dubins segment type: {segment_type}")
+
+
+def sample_dubins_path(
+    start: Pose2D,
+    goal: Pose2D,
+    turning_radius: float,
+    step_size: float = 0.5,
+) -> np.ndarray:
+    """Sample the selected shortest Dubins word as ``(x, y, heading)`` rows."""
+
+    if not isfinite(step_size) or step_size <= 0.0:
+        raise ValueError("step_size must be finite and positive")
+    word, parameters = _shortest_word(start, goal, turning_radius)
+    x, y, heading = start.x, start.y, start.heading
+    samples = [(x, y, heading)]
+    for segment_type, parameter in zip(word, parameters):
+        remaining = parameter * turning_radius
+        while remaining > _EPS:
+            distance = min(step_size, remaining)
+            x, y, heading = _advance_segment(
+                x, y, heading, segment_type, distance, turning_radius
+            )
+            samples.append((x, y, heading))
+            remaining -= distance
+    samples[-1] = (goal.x, goal.y, goal.heading)
+    return np.asarray(samples, dtype=float)
 

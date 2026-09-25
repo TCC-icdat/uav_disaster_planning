@@ -2,7 +2,7 @@ from math import pi
 
 import pytest
 
-from uav_planning.geometry.dubins import dubins_shortest_path_length
+from uav_planning.geometry.dubins import dubins_shortest_path_length, sample_dubins_path
 from uav_planning.models import Pose2D
 
 
@@ -45,4 +45,13 @@ def test_result_is_finite_and_nonnegative(radius: float) -> None:
     )
     assert value >= 0.0
     assert value < float("inf")
+
+
+def test_sampled_dubins_path_reaches_goal_pose() -> None:
+    start = Pose2D(1.0, 2.0, 0.4)
+    goal = Pose2D(14.0, 9.0, 2.2)
+    samples = sample_dubins_path(start, goal, turning_radius=3.0, step_size=0.2)
+    assert samples[0] == pytest.approx((start.x, start.y, start.heading))
+    assert samples[-1] == pytest.approx((goal.x, goal.y, goal.heading))
+    assert len(samples) > 2
 

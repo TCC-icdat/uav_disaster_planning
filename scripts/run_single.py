@@ -43,22 +43,29 @@ def main() -> None:
         config_path = ROOT / config_path
     config = load_config(config_path)
     scenario = ScenarioGenerator(config).generate()
-    provider = (
+    planning_provider = (
         DubinsTravelTimeProvider()
-        if config.travel_model == "dubins"
+        if config.planning_travel_model == "dubins"
         else EuclideanTravelTimeProvider()
     )
-    evaluator = RouteEvaluator(provider)
+    execution_provider = (
+        DubinsTravelTimeProvider()
+        if config.execution_travel_model == "dubins"
+        else EuclideanTravelTimeProvider()
+    )
+    evaluator = RouteEvaluator(planning_provider)
     optimizer = RouteOptimizer(
         evaluator,
         local_search_max_iterations=config.planner.local_search_max_iterations,
         local_search_time_limit_sec=config.planner.local_search_time_limit_sec,
+        objective_mode=config.objective_mode,
     )
     initial = InitialPlanner(optimizer)
     simulator = Simulator(
         scenario,
         initial,
         optimizer,
+        execution_evaluator=RouteEvaluator(execution_provider),
         high_priority_threshold=config.high_priority_threshold,
     )
     strategies = [
