@@ -50,6 +50,17 @@ CONFIG_FILES = {
 }
 FORMAL_ROOT = ROOT / "results" / "formal"
 SEEDS_30 = tuple(range(1000, 1030))
+E5_REQUIRED_COMPLETION_FIELDS = (
+    "run_status",
+    "runner_wall_runtime",
+    "total_algorithm_runtime",
+    "feasible",
+    "time_consistency_pass",
+    "completed_task_count",
+    "total_task_count",
+    "all_uavs_returned",
+    "scenario_fingerprint",
+)
 
 
 def _provider(name: str):
@@ -191,11 +202,49 @@ def _append_row(path: Path, row: dict[str, object]) -> None:
         os.fsync(stream.fileno())
 
 
-def _completed_keys(path: Path, fields: tuple[str, ...]) -> set[tuple[str, ...]]:
+def _completed_keys(
+    path: Path,
+    fields: tuple[str, ...],
+    required_fields: tuple[str, ...] = (),
+) -> set[tuple[str, ...]]:
     if not path.exists():
         return set()
     with path.open("r", newline="", encoding="utf-8") as stream:
-        return {_key(row, fields) for row in csv.DictReader(stream)}
+        rows = list(csv.DictReader(stream))
+    return {
+        _key(row, fields)
+        for row in rows
+        if all(str(row.get(field, "")).strip() for field in required_fields)
+        and (not required_fields or row.get("run_status") == "completed")
+    }
+
+
+def _upsert_row(
+    path: Path,
+    row: dict[str, object],
+    key_fields: tuple[str, ...],
+) -> None:
+    """Atomically replace an E5 checkpoint row with the same run key."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existing: list[dict[str, object]] = []
+    fieldnames = list(row)
+    if path.exists() and path.stat().st_size > 0:
+        with path.open("r", newline="", encoding="utf-8") as stream:
+            reader = csv.DictReader(stream)
+            existing = [dict(item) for item in reader]
+            fieldnames = list(dict.fromkeys([*(reader.fieldnames or ()), *fieldnames]))
+    target_key = _key(row, key_fields)
+    retained = [item for item in existing if _key(item, key_fields) != target_key]
+    temporary = path.with_suffix(".csv.tmp")
+    with temporary.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        for item in [*retained, row]:
+            writer.writerow({field: item.get(field, "") for field in fieldnames})
+        stream.flush()
+        os.fsync(stream.fileno())
+    temporary.replace(path)
 
 
 def _optimizer(config: ExperimentConfig) -> RouteOptimizer:
@@ -309,6 +358,27 @@ def _run_dynamic(
     row.update(result.metrics)
     row["runner_wall_runtime"] = perf_counter() - wall_started
     row["scenario_fingerprint"] = _scenario_fingerprint(scenario)
+    if experiment == "E5":
+        returned_uavs = {
+            int(event["uav_id"])
+            for event in result.event_log
+            if event["event"] == "RETURN_DEPOT" and "uav_id" in event
+        }
+        row.update(
+            {
+                "run_status": "completed",
+                "initial_task_count": int(spec["initial_count"]),
+                "dynamic_task_count": int(spec["dynamic_count"]),
+                "total_task_count": len(scenario.all_tasks),
+                "completed_task_count": len(result.history),
+                "all_uavs_returned": len(returned_uavs) == len(scenario.uavs),
+                "time_consistency_pass": bool(
+                    result.metrics["time_consistency_check"]
+                ),
+                "error_type": "",
+                "error_message": "",
+            }
+        )
     return row
 
 
@@ -704,7 +774,10 @@ def main() -> None:
         raw_path.unlink()
 
     fields = _key_fields(experiment)
-    completed = _completed_keys(raw_path, fields) if args.resume else set()
+    required_fields = E5_REQUIRED_COMPLETION_FIELDS if experiment == "E5" else ()
+    completed = (
+        _completed_keys(raw_path, fields, required_fields) if args.resume else set()
+    )
     specs = _specs(experiment)
     pending = [spec for spec in specs if _key(spec, fields) not in completed]
     base = load_config(_config_path(experiment))
@@ -713,17 +786,51 @@ def main() -> None:
         f"pending={len(pending)}"
     )
     for index, spec in enumerate(pending, start=1):
-        row = _run_e1(base, spec) if experiment == "E1" else _run_dynamic(
-            experiment, base, spec
-        )
-        _append_row(raw_path, row)
+        started = perf_counter()
+        try:
+            row = _run_e1(base, spec) if experiment == "E1" else _run_dynamic(
+                experiment, base, spec
+            )
+        except Exception as error:
+            if experiment != "E5":
+                raise
+            row = {
+                "experiment": "E5",
+                "scale": str(spec["scale"]),
+                "seed": int(spec["seed"]),
+                "variant": str(spec["variant"]),
+                "strategy": str(spec["strategy"]),
+                "run_status": "error",
+                "initial_task_count": int(spec["initial_count"]),
+                "dynamic_task_count": int(spec["dynamic_count"]),
+                "total_task_count": int(spec["initial_count"])
+                + int(spec["dynamic_count"]),
+                "completed_task_count": "",
+                "all_uavs_returned": "",
+                "time_consistency_pass": "",
+                "feasible": "",
+                "runner_wall_runtime": perf_counter() - started,
+                "error_type": type(error).__name__,
+                "error_message": str(error),
+            }
+        if experiment == "E5":
+            _upsert_row(raw_path, row, fields)
+        else:
+            _append_row(raw_path, row)
         print(
-            f"[{index}/{len(pending)}] saved "
+            f"[{index}/{len(pending)}] saved status={row.get('run_status', 'completed')} "
             + ", ".join(f"{field}={spec[field]}" for field in fields)
         )
     if not raw_path.exists():
         raise RuntimeError("no formal raw results were produced")
     _write_summaries(experiment, raw_path)
+    if experiment == "E5":
+        failed = pd.read_csv(raw_path)["run_status"].ne("completed")
+        if bool(failed.any()):
+            raise RuntimeError(
+                "E5 contains incomplete/error checkpoints; correct the environment and rerun "
+                "with --resume before formal analysis"
+            )
     print(raw_path)
     print(output_dir / "summary.csv")
     paired_path = output_dir / "paired.csv"

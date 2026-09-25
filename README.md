@@ -108,7 +108,16 @@ objective_mode: weighted_delay  # 或 total_travel_time
 
 因此 E3 的 `euclidean_planned` 含义是“用欧氏旅行时间规划，但按 Dubins 物理时间执行”，不是让固定翼按欧氏直线执行。无论采用哪种规划目标，输出指标都会统一报告真实执行历史上的 `weighted_delay`。
 
-正式实验模板位于 `configs/experiments/`：E1 精确基准、E2 时效目标、E3 旅行模型、E4 动态策略和 E5 规模模板。E5 标记为 `frozen_template_do_not_run`，本阶段未执行 20/50/100 规模。
+正式实验模板位于 `configs/experiments/`：E1 精确基准、E2 时效目标、E3 旅行模型、E4 动态策略和 E5 规模模板。E5 v2 已按冻结的 20/50/100 任务规模、seeds 2000–2009 和 NoReorder/Full/Local 三策略完成 90 组正式运行；配置中的历史 `frozen_template_do_not_run` 标签仅记录执行前冻结状态，正式授权来自 E5 v2 执行提示词。
+
+E5 支持逐条检查点与断点续跑，并由独立脚本完成完整性检查、配对统计、绘图和报告：
+
+```bash
+python scripts/run_formal_experiments.py --experiment E5 --resume
+python scripts/analyze_e5_formal.py --analyze
+```
+
+正式输出位于 `results/formal/E5/`，其中 `E5_FORMAL_REPORT.md` 给出十节验收结论，`integrity_manifest.json` 保存 E1–E4、Canonical 和冻结核心文件的前后哈希。
 
 Dubins 公式采用标准六路径族解析构造。实现依据为 A. M. Shkel and V. Lumelsky, “Classification of the Dubins set,” *Robotics and Autonomous Systems*, 2001；代码为本项目独立的长度计算实现，未引入第三方 Dubins C 扩展。
 
