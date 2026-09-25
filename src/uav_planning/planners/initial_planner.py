@@ -1,4 +1,4 @@
-"""Initial Regret-2 plus VNS assignment and routing."""
+"""Initial Regret-2 plus multi-neighborhood local-search routing."""
 
 from __future__ import annotations
 

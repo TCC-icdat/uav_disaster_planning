@@ -51,8 +51,8 @@ def main() -> None:
     evaluator = RouteEvaluator(provider)
     optimizer = RouteOptimizer(
         evaluator,
-        vns_max_iterations=config.planner.vns_max_iterations,
-        vns_time_limit_sec=config.planner.vns_time_limit_sec,
+        local_search_max_iterations=config.planner.local_search_max_iterations,
+        local_search_time_limit_sec=config.planner.local_search_time_limit_sec,
     )
     initial = InitialPlanner(optimizer)
     simulator = Simulator(
@@ -79,6 +79,15 @@ def main() -> None:
     metrics.to_csv(raw_path, index=False)
     summary_path = summary_dir / f"seed{config.seed}_summary.csv"
     metrics.to_csv(summary_path, index=False)
+    consistency_path = summary_dir / "TIME_CONSISTENCY_CHECK.txt"
+    checks_passed = bool(metrics["time_consistency_check"].all())
+    consistency_path.write_text(
+        "TIME_CONSISTENCY_CHECK: " + ("PASS\n" if checks_passed else "FAIL\n")
+        + "Invariant: every free task service_start >= its replanning event time.\n"
+        + "Invariant: completed TaskExecutionRecord values are immutable.\n"
+        + "Metrics source: accumulated execution history, not a t=0 final-route replay.\n",
+        encoding="utf-8",
+    )
     for result in results:
         pd.DataFrame(result.event_log).to_csv(
             raw_dir / f"seed{config.seed}_{result.metrics['strategy']}_events.csv",
@@ -112,6 +121,7 @@ def main() -> None:
     print(f"output CSV: {raw_path}")
     print(f"summary CSV: {summary_path}")
     print(f"figure path: {figure_path}")
+    print("TIME_CONSISTENCY_CHECK: " + ("PASS" if checks_passed else "FAIL"))
 
 
 if __name__ == "__main__":

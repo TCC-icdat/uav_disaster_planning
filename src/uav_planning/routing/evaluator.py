@@ -46,6 +46,7 @@ class RouteEvaluation:
     """Deterministic schedule and aggregate costs for one route."""
 
     feasible: bool
+    departure_times: dict[int, float] = field(default_factory=dict)
     arrival_times: dict[int, float] = field(default_factory=dict)
     start_times: dict[int, float] = field(default_factory=dict)
     completion_times: dict[int, float] = field(default_factory=dict)
@@ -72,6 +73,7 @@ class RouteEvaluator:
 
         pose = start_pose or uav.start_pose
         time = start_time
+        departure_times: dict[int, float] = {}
         arrival_times: dict[int, float] = {}
         start_times: dict[int, float] = {}
         completion_times: dict[int, float] = {}
@@ -80,6 +82,7 @@ class RouteEvaluator:
         total_service = 0.0
 
         for task in task_sequence:
+            departure_times[task.task_id] = time
             travel = self.travel_time_provider.travel_time(uav, pose, task.pose)
             arrival = time + travel
             service_start = max(arrival, task.release_time)
@@ -96,9 +99,11 @@ class RouteEvaluator:
         return_travel = self.travel_time_provider.travel_time(uav, pose, uav.start_pose)
         total_travel += return_travel
         return_time = time + return_travel
-        feasible = return_time - start_time <= uav.max_mission_time + 1e-9
+        # H_k is an absolute mission clock, not a fresh budget at every replan.
+        feasible = return_time <= uav.max_mission_time + 1e-9
         return RouteEvaluation(
             feasible=feasible,
+            departure_times=departure_times,
             arrival_times=arrival_times,
             start_times=start_times,
             completion_times=completion_times,

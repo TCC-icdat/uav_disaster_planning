@@ -1,15 +1,16 @@
-"""Execution-prefix-preserving local suffix replanning."""
+"""Best insertion followed by affected-UAV suffix local improvement."""
 
 from __future__ import annotations
 
 from math import inf
 
-from uav_planning.models import Plan, Route, SimulationState, Task
-from uav_planning.routing.insertion import PlanningError, RouteOptimizer
+from uav_planning.models import Plan, SimulationState, Task
+from uav_planning.planners.no_reorder import best_no_reorder_insertion
+from uav_planning.routing.insertion import RouteOptimizer
 
 
 class LocalReplanner:
-    """Optimize only the free suffixes of the most affected UAVs."""
+    """Improve a no-reorder incumbent within at most ``h`` UAV routes."""
 
     name = "local"
 
@@ -19,6 +20,8 @@ class LocalReplanner:
         self.optimizer = optimizer
         self.h = h
         self.last_affected_uav_ids: set[int] = set()
+        self.last_incumbent_objective = inf
+        self.last_final_objective = inf
 
     def replan(
         self,
@@ -26,59 +29,45 @@ class LocalReplanner:
         new_task: Task,
         h: int | None = None,
     ) -> Plan:
-        """Select affected UAVs by insertion cost and reoptimize locally."""
+        """Insert first, then strictly improve only affected free suffixes."""
 
+        insertion = best_no_reorder_insertion(self.optimizer, state, new_task)
         affected_count = min(h or self.h, len(state.uavs))
-        scores: list[tuple[float, int]] = []
-        old_eval = self.optimizer.evaluate_plan(
-            state.plan,
-            state.uavs,
-            state.tasks,
-            objective_task_ids=set(state.tasks) - {new_task.task_id},
+        ranked = sorted(
+            insertion.per_uav_objectives.items(), key=lambda item: (item[1], item[0])
         )
-        for uav_id in sorted(state.uavs):
-            best = inf
-            route = state.plan.routes[uav_id].task_ids
-            first_position = len(state.commitment_prefixes[uav_id])
-            for position in range(first_position, len(route) + 1):
-                candidate = state.plan.copy()
-                candidate.routes[uav_id].task_ids.insert(position, new_task.task_id)
-                evaluation = self.optimizer.evaluate_plan(
-                    candidate,
-                    state.uavs,
-                    state.tasks,
-                    objective_task_ids=set(state.tasks),
-                )
-                if evaluation.feasible:
-                    best = min(best, evaluation.objective - old_eval.objective)
-            scores.append((best, uav_id))
-        finite = [item for item in scores if item[0] < inf]
-        if not finite:
-            raise PlanningError(f"no feasible local insertion for task {new_task.task_id}")
-        finite.sort()
-        affected = {uav_id for _, uav_id in finite[:affected_count]}
+        affected = {uav_id for uav_id, _ in ranked[:affected_count]}
+        affected.add(insertion.best_uav_id)
+        if len(affected) > affected_count:
+            removable = sorted(
+                affected - {insertion.best_uav_id},
+                key=lambda uav_id: insertion.per_uav_objectives[uav_id],
+                reverse=True,
+            )
+            while len(affected) > affected_count:
+                affected.remove(removable.pop(0))
         self.last_affected_uav_ids = affected
 
-        routes: dict[int, Route] = {}
-        released: list[int] = [new_task.task_id]
-        prefix_lengths: dict[int, int] = {}
-        for uav_id in sorted(state.uavs):
-            old_route = state.plan.routes[uav_id].task_ids
-            if uav_id in affected:
-                prefix = list(state.commitment_prefixes[uav_id])
-                routes[uav_id] = Route(uav_id, prefix)
-                prefix_lengths[uav_id] = len(prefix)
-                released.extend(old_route[len(prefix) :])
-            else:
-                routes[uav_id] = Route(uav_id, list(old_route))
-                prefix_lengths[uav_id] = len(old_route)
-
-        return self.optimizer.optimize(
+        objective_ids = {
+            task_id
+            for route in insertion.plan.routes.values()
+            for task_id in route.task_ids
+        }
+        self.last_incumbent_objective = insertion.objective
+        result = self.optimizer.local_search(
+            insertion.plan,
             state.uavs,
             state.tasks,
-            Plan(routes),
-            sorted(released),
-            fixed_prefix_lengths=prefix_lengths,
+            fixed_prefix_lengths={uav_id: 0 for uav_id in state.uavs},
             mutable_uav_ids=affected,
-            objective_task_ids=set(state.tasks),
+            objective_task_ids=objective_ids,
+            anchors=state.anchors,
         )
+        self.last_final_objective = self.optimizer.evaluate_plan(
+            result,
+            state.uavs,
+            state.tasks,
+            objective_task_ids=objective_ids,
+            anchors=state.anchors,
+        ).objective
+        return result

@@ -1,83 +1,130 @@
-# 第一阶段实现报告
+# 第一阶段 MVP 验收修正报告
 
-## 完成状态
+## 修正结论
 
-第一阶段 MVP 已形成可运行闭环：固定 seed 场景生成、SAR 初始计划、两个动态任务释放、三种重规划策略、CSV 指标、离散事件日志、路线图和自动化测试。
+本轮完成了动态重规划时间一致性修正、核心锁定规则统一、Local Replanning 机制调整、算法术语更正和 Regret-2 单可行位置修正。当前代码已通过针对时间回溯反例的自动化测试和端到端 sanity check，但这些结果仍只用于工程验收，不作为论文实验结论。
 
-验证环境：Python 3.13.5。验证命令与结果：
+验证环境：Python 3.13.5。
 
 ```text
 python -m pytest
-15 passed
+19 passed
 
 python scripts/run_single.py --config configs/small_debug.yaml
-seed = 42
-strategies = no_reorder, full, local
+TIME_CONSISTENCY_CHECK: PASS
 ```
 
-## 已完成模块
+## P0：在线时间一致性
 
-- `models.py`：Pose2D、Task、UAV、Route、Plan、UAVExecutionState、SimulationState。
-- `geometry/dubins.py`：LSL / RSR / LSR / RSL / RLR / LRL 纯 Python 最短路径长度。
-- `routing/evaluator.py`：Euclidean / Dubins provider 和唯一权威 RouteEvaluator。
-- `scenario/`：统一 `numpy.random.Generator` 的 synthetic release 场景与事件源接口。
-- `routing/insertion.py`：Regret-2 构造和共享 VNS 引擎。
-- `routing/neighborhoods.py`：四个冻结邻域。
-- `planners/`：Initial、NoReorder、Full、Local。
-- `simulation/`：TASK_RELEASE 驱动的重规划和完整执行事件日志。
-- `metrics/`：加权响应延迟、均值、makespan、运行时间和计划扰动。
-- `visualization/`：初始路线与 Local 最终路线对比图。
+旧实现会把动态候选路线从 Depot、`t=0` 全量重算，允许自由任务在重规划事件之前“重新执行”。新实现将仿真状态拆为：
 
-## 与数学模型的对应关系
+- 不可变的 `TaskExecutionRecord` 历史；
+- 已经开始、不可抢占的飞行目标或服务任务；
+- 不可中断的返航动作；
+- 每架 UAV 的未来 `PlanningAnchor(anchor_time, anchor_pose)`；
+- 只包含尚未开始任务的自由计划。
 
-| 数学定义 | 代码位置 |
-|---|---|
-| 任务 `(p_j, r_j, w_j, s_j, phi_j)` | `Task` |
-| UAV `(v_k, R_k, H_k)` | `UAV` |
-| `tau_ij^k = L_Dubins / v_k` | `DubinsTravelTimeProvider` |
-| `S_j >= r_j` 与时间递推 | `RouteEvaluator.evaluate_route` |
-| 每任务唯一分配 | `Simulator._validate_task_set` |
-| 最大任务时间与返航 | `RouteEvaluation.feasible` |
-| `sum w_j(C_j-r_j)` | `weighted_response_delay` |
-| 执行前缀锁定 | `Simulator._build_state` 与动态 planners |
-| Local 只释放 affected UAV 后缀 | `LocalReplanner.replan` |
+每个 release event 的处理顺序为：
 
-## seed=42 验收结果
+1. 从上一个事件向前推进到当前事件；
+2. 将已完成任务写入不可变历史；
+3. 锁定已经开始的飞行段或服务任务；
+4. 为自由后缀计算未来锚点；
+5. 只对自由任务调用重规划器；
+6. 验证新计划中所有自由任务 `service_start >= event_time`；
+7. 最终指标直接使用累计执行历史。
 
-本次固定输出中的加权响应延迟：
+返航中的 UAV 不被中断；其未来锚点为原计划抵达 Depot 的时刻和 Depot pose。已经返航且空闲的 UAV 使用当前事件时刻作为锚点。
 
-| strategy | weighted_delay | replanning_count | feasible |
+新增测试：
+
+- `test_replanning_cannot_schedule_pending_task_in_the_past`；
+- `test_completed_history_is_unchanged_after_later_replanning`。
+
+其中第一项覆盖 `t=10` 重规划、空闲 UAV 接收另一架 UAV 的旧 pending task 的确定反例，并断言开始时间不小于 10。
+
+## 统一锁定规则
+
+默认 `commitment_horizon = 0`。NoReorder、Full 和 Local 共同冻结：
+
+- 已完成任务；
+- 当前已经开始飞往的任务；
+- 当前正在服务的任务；
+- 已经开始的返航动作。
+
+Local 不再额外冻结“下一任务”。非抢占动作由 Simulator 在进入所有重规划器之前统一移出自由计划，因此三种策略面对完全相同的物理锁定边界。
+
+## Local 与 NoReorder 的关系
+
+Local 当前实现为 `best insertion + restricted suffix local improvement`：
+
+1. 调用与 NoReorder 相同的最佳可行新任务插入；
+2. 将该插入解作为 incumbent；
+3. 按各 UAV 的最佳插入目标值选择 `h` 架 affected UAV，且必含最佳插入 UAV；
+4. 只在 affected UAV 的自由后缀使用 relocate、cross-route relocate、swap 和 2-opt；
+5. 只接受目标值严格改善的候选；
+6. 非 affected UAV 路线保持不变。
+
+因此在同一事件、同一执行历史和同一组锚点下，Local 的事件后计划不会比 NoReorder incumbent 更差。不同策略经过多个事件后可能产生不同执行历史，因此整场最终目标不具备逐 seed 的静态支配保证。
+
+Regret-2 只用于 InitialPlanner 和 FullReplanner。Local 不再释放任务池后重新做 Regret-2 构造。
+
+## P1：算法名称和 Regret-2
+
+旧实现没有 shaking，不属于经典 VNS。代码和文档已统一使用：
+
+> Multi-Neighborhood Local Search / 多邻域局部搜索
+
+内部函数已由 `_vns` 改为 `local_search`，配置项改为 `local_search_max_iterations` 和 `local_search_time_limit_sec`。
+
+当某任务只有一个可行插入位置时，`regret2_value` 返回正无穷，使其获得最高插入优先级。新增测试：
+
+- `test_regret_prioritizes_task_with_single_feasible_insertion`。
+
+## seed=42 修正后输出
+
+| strategy | weighted_delay | assignment_changes | TIME_CONSISTENCY_CHECK |
 |---|---:|---:|---|
-| no_reorder | 347.260661 | 2 | True |
-| full | 334.222419 | 2 | True |
-| local | 364.847349 | 2 | True |
+| no_reorder | 347.260661 | 0 | PASS |
+| full | 334.222419 | 2 | PASS |
+| local | 334.222419 | 2 | PASS |
 
-运行时间记录在 `results/raw/seed42_metrics.csv`。运行时间是机器相关量，每次执行会略有波动，不作为固定快照值写入本报告。
+所有任务完成且只完成一次，服务开始不早于 release time，最终返航满足续航约束。
 
-## 当前简化假设
+## replanning_debug：10 seeds sanity check
 
-- EO 只产生 synthetic release，不模拟图像识别或真实覆盖轨迹。
-- SAR 服务为任务点、指定进入航向和服务时长，不建模条带 entry/exit 段。
-- 动态时刻通过冻结已完成、正在服务或正在飞往的任务前缀避免回滚；优化仍对完整路线进行确定性重评估。
-- Debug 图使用任务点之间的示意折线；优化代价使用真实的解析 Dubins 长度。
-- 同类 SAR 在默认配置中参数相同，但数据结构允许逐机设置速度、转弯半径和续航。
+配置：3 UAV、8 initial、8 dynamic、`h=2`，seeds 40-49。
 
-## 已知限制
+| strategy | mean weighted_delay | mean replanning runtime (s) | total assignment changes | total successor changes |
+|---|---:|---:|---:|---:|
+| no_reorder | 1364.395832 | 0.001971 | 0 | 0 |
+| full | 1338.826914 | 0.020567 | 44 | 49 |
+| local | 1332.498391 | 0.008654 | 28 | 30 |
 
-- 尚未实现 Simple EO sweep、连续 Dubins 轨迹采样或静态障碍边代价。
-- 尚未加入 5-8 任务的穷举/MILP 正确性基准。
-- `small_debug` 只有 2 架 UAV 且 Local 默认 `h=2`，因此受影响 UAV 数量在该场景中等于全部机队；Local 的范围优势需在后续 3/5/8 架实验中评估。
-- 当前事件日志在最终锁定一致计划上重建 TASK_START / COMPLETE / RETURN；不执行固定时间步飞行动力学积分。
-- 单 seed 结果不能用于论文统计结论。
+诊断结论仅限代码行为：
 
-## 下一阶段建议
+- 30/30 策略运行均可行且通过时间一致性检查；
+- Local 在 8/10 seeds 严格优于整场 NoReorder，1 个相同，1 个因跨事件历史路径依赖略差；
+- Local 在 10/10 seeds 位于 Full 最终目标的 5% 以内；
+- Local 确实产生 assignment/successor 调整，且累计修改量小于 Full；
+- 每个 Local 重规划调用都保证不劣于相同状态下的 NoReorder insertion incumbent。
 
-1. 增加 5-8 个任务的穷举或开源 MILP 基准，验证启发式目标差距。
-2. 在冻结当前 MVP 后，设计 20/50/100 任务与 3/5/8 UAV 的批量实验矩阵。
-3. 分别运行 Euclidean 与 Dubins provider，报告计划误差和实际飞行时间差异。
-4. 对 `h` 和 commitment horizon 做敏感性实验，并给出统计显著性与置信区间。
+这些数据是 sanity check，不具备正式样本设计、统计检验或论文结论资格。
 
-## 禁止擅自扩展
+## 输出文件
 
-在第一阶段结果稳定前，不加入 DRL/MARL、GA/ACO、动态障碍、天气、UAV 故障、通信模型、复杂 GUI、数据库、Web 服务、六自由度动力学或新的加权目标；总距离继续只作为评价指标，不并入主目标。
+- `results/raw/seed42_metrics.csv`
+- `results/raw/seed42_<strategy>_events.csv`
+- `results/summary/seed42_summary.csv`
+- `results/summary/TIME_CONSISTENCY_CHECK.txt`
+- `results/raw/replanning_debug_10seeds_metrics.csv`
+- `results/summary/replanning_debug_10seeds_summary.csv`
+- `results/figures/debug_seed42.png`
 
+## 保留限制与下一步边界
+
+- Debug 图仍为访问顺序折线；正式论文图需要新增纯绘图用途的 `sample_dubins_path`。
+- 正式主实验前仍需加入 5-8 tasks、2-3 UAV 的枚举或开源 MILP 精确基准。
+- Simple EO sweep 尚未实现；当前仍使用 synthetic release。
+- 不开始 20/50/100 任务正式实验。
+- 不加入 DRL/MARL、GA/ACO、动态障碍、天气、故障、通信、GUI、数据库、Web 服务或新的加权目标。

@@ -14,7 +14,7 @@ import pandas as pd
 
 from uav_planning.config import load_config
 from uav_planning.planners import FullReplanner, InitialPlanner, LocalReplanner, NoReorderInsertionPlanner
-from uav_planning.routing.evaluator import DubinsTravelTimeProvider, RouteEvaluator
+from uav_planning.routing.evaluator import DubinsTravelTimeProvider, EuclideanTravelTimeProvider, RouteEvaluator
 from uav_planning.routing.insertion import RouteOptimizer
 from uav_planning.scenario.generator import ScenarioGenerator
 from uav_planning.simulation.simulator import Simulator
@@ -33,10 +33,11 @@ def main() -> None:
     for seed in args.seeds:
         config = replace(base_config, seed=seed)
         scenario = ScenarioGenerator(config).generate()
+        provider = DubinsTravelTimeProvider() if config.travel_model == "dubins" else EuclideanTravelTimeProvider()
         optimizer = RouteOptimizer(
-            RouteEvaluator(DubinsTravelTimeProvider()),
-            config.planner.vns_max_iterations,
-            config.planner.vns_time_limit_sec,
+            RouteEvaluator(provider),
+            config.planner.local_search_max_iterations,
+            config.planner.local_search_time_limit_sec,
         )
         simulator = Simulator(
             scenario,
@@ -50,10 +51,30 @@ def main() -> None:
             LocalReplanner(optimizer, config.planner.affected_uav_count_h),
         ):
             rows.append(simulator.run(strategy).metrics)
-    output = ROOT / "results" / "raw" / "batch_metrics.csv"
+    stem = f"{config_path.stem}_{len(args.seeds)}seeds"
+    output = ROOT / "results" / "raw" / f"{stem}_metrics.csv"
     output.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(rows).to_csv(output, index=False)
+    frame = pd.DataFrame(rows)
+    frame.to_csv(output, index=False)
+    summary = ROOT / "results" / "summary" / f"{stem}_summary.csv"
+    summary.parent.mkdir(parents=True, exist_ok=True)
+    numeric = [
+        "weighted_delay",
+        "mean_delay",
+        "high_priority_mean_delay",
+        "makespan",
+        "total_travel_time",
+        "total_replanning_runtime",
+        "assignment_changes",
+        "successor_edge_changes",
+    ]
+    frame.groupby("strategy", as_index=False)[numeric].mean().to_csv(summary, index=False)
     print(output)
+    print(summary)
+    print(
+        "TIME_CONSISTENCY_CHECK: "
+        + ("PASS" if bool(frame["time_consistency_check"].all()) else "FAIL")
+    )
 
 
 if __name__ == "__main__":

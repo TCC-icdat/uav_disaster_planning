@@ -19,8 +19,8 @@ def completed_run():
     scenario = ScenarioGenerator(config).generate()
     optimizer = RouteOptimizer(
         RouteEvaluator(DubinsTravelTimeProvider()),
-        config.planner.vns_max_iterations,
-        config.planner.vns_time_limit_sec,
+        config.planner.local_search_max_iterations,
+        config.planner.local_search_time_limit_sec,
     )
     result = Simulator(
         scenario, InitialPlanner(optimizer), optimizer, config.high_priority_threshold
@@ -38,31 +38,21 @@ def test_every_task_is_assigned_exactly_once(completed_run) -> None:
 
 
 def test_all_routes_return_within_endurance(completed_run) -> None:
-    scenario, optimizer, result = completed_run
-    tasks = {task.task_id: task for task in scenario.all_tasks}
-    evaluation = optimizer.evaluate_plan(
-        result.final_plan,
-        {uav.uav_id: uav for uav in scenario.uavs},
-        tasks,
-        set(tasks),
+    scenario, _, result = completed_run
+    assert result.metrics["feasible"]
+    return_events = [
+        event for event in result.event_log if event["event"] == "RETURN_DEPOT"
+    ]
+    assert return_events
+    assert max(float(event["time"]) for event in return_events) <= max(
+        uav.max_mission_time for uav in scenario.uavs
     )
-    assert evaluation.feasible
-    for uav in scenario.uavs:
-        assert evaluation.route_evaluations[uav.uav_id].return_time <= (
-            uav.max_mission_time + 1e-9
-        )
 
 
 def test_no_task_starts_before_release(completed_run) -> None:
-    scenario, optimizer, result = completed_run
+    scenario, _, result = completed_run
     tasks = {task.task_id: task for task in scenario.all_tasks}
-    evaluation = optimizer.evaluate_plan(
-        result.final_plan,
-        {uav.uav_id: uav for uav in scenario.uavs},
-        tasks,
-        set(tasks),
-    )
-    for route in evaluation.route_evaluations.values():
-        for task_id, start in route.start_times.items():
-            assert start >= tasks[task_id].release_time
+    for task_id, record in result.history.items():
+        assert record.start_time >= tasks[task_id].release_time
+    assert result.metrics["time_consistency_check"]
 

@@ -86,9 +86,46 @@ class UAVExecutionState:
     remaining_task_ids: list[int] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class PlanningAnchor:
+    """Earliest pose and time from which a UAV may execute a free suffix."""
+
+    uav_id: int
+    time: float
+    pose: Pose2D
+
+
+@dataclass(frozen=True)
+class TaskExecutionRecord:
+    """Immutable execution history for one task."""
+
+    task_id: int
+    uav_id: int
+    departure_time: float
+    arrival_time: float
+    start_time: float
+    completion_time: float
+    travel_time: float
+
+
+@dataclass(frozen=True)
+class ReturnExecutionRecord:
+    """A non-preemptible return-to-depot action."""
+
+    uav_id: int
+    departure_time: float
+    completion_time: float
+    travel_time: float
+
+
 @dataclass
 class SimulationState:
-    """Read-only snapshot supplied to a dynamic replanner."""
+    """Forward-only snapshot supplied to a dynamic replanner.
+
+    ``plan`` contains only tasks whose flight leg has not started. A task that
+    is already being approached or serviced is removed from the free plan and
+    represented by the UAV's future ``anchor``.
+    """
 
     current_time: float
     uavs: dict[int, UAV]
@@ -97,8 +134,9 @@ class SimulationState:
     execution_states: dict[int, UAVExecutionState]
     completed_task_ids: set[int]
     executing_task_ids: dict[int, int]
-    locked_prefixes: dict[int, list[int]]
-    commitment_prefixes: dict[int, list[int]]
+    anchors: dict[int, PlanningAnchor]
+    locked_task_ids: dict[int, int]
+    history: dict[int, TaskExecutionRecord]
 
 
 @dataclass(frozen=True)

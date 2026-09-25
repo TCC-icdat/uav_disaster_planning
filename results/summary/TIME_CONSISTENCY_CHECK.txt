@@ -1,0 +1,4 @@
+TIME_CONSISTENCY_CHECK: PASS
+Invariant: every free task service_start >= its replanning event time.
+Invariant: completed TaskExecutionRecord values are immutable.
+Metrics source: accumulated execution history, not a t=0 final-route replay.

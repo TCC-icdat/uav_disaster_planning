@@ -38,8 +38,9 @@ class TaskConfig:
 @dataclass(frozen=True)
 class PlannerConfig:
     affected_uav_count_h: int
-    vns_max_iterations: int
-    vns_time_limit_sec: float
+    commitment_horizon: int
+    local_search_max_iterations: int
+    local_search_time_limit_sec: float
 
 
 @dataclass(frozen=True)
@@ -95,11 +96,18 @@ def load_config(path: str | Path) -> ExperimentConfig:
         ),
         planner=PlannerConfig(
             affected_uav_count_h=int(planner_raw["affected_uav_count_h"]),
-            vns_max_iterations=int(planner_raw["vns_max_iterations"]),
-            vns_time_limit_sec=float(planner_raw["vns_time_limit_sec"]),
+            commitment_horizon=int(planner_raw.get("commitment_horizon", 0)),
+            local_search_max_iterations=int(
+                planner_raw["local_search_max_iterations"]
+            ),
+            local_search_time_limit_sec=float(
+                planner_raw["local_search_time_limit_sec"]
+            ),
         ),
     )
     if config.travel_model not in {"dubins", "euclidean"}:
         raise ValueError("travel_model must be 'dubins' or 'euclidean'")
+    if config.planner.commitment_horizon != 0:
+        raise ValueError("MVP core comparison requires commitment_horizon = 0")
     return config
 

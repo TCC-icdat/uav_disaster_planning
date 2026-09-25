@@ -1,4 +1,4 @@
-"""The four VNS neighborhoods frozen for the MVP."""
+"""The four local-search neighborhoods frozen for the MVP."""
 
 from __future__ import annotations
 

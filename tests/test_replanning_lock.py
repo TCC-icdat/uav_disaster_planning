@@ -1,5 +1,15 @@
-from uav_planning.models import Plan, Pose2D, Route, SimulationState, Task, UAV, UAVExecutionState
+from uav_planning.models import (
+    Plan,
+    PlanningAnchor,
+    Pose2D,
+    Route,
+    SimulationState,
+    Task,
+    UAV,
+    UAVExecutionState,
+)
 from uav_planning.planners import FullReplanner, LocalReplanner
+from uav_planning.planners.no_reorder import best_no_reorder_insertion
 from uav_planning.routing.evaluator import EuclideanTravelTimeProvider, RouteEvaluator
 from uav_planning.routing.insertion import RouteOptimizer
 
@@ -26,26 +36,34 @@ def _state() -> tuple[SimulationState, Task, RouteOptimizer]:
         tasks=tasks,
         plan=plan,
         execution_states=execution,
-        completed_task_ids={1},
-        executing_task_ids={1: 1},
-        locked_prefixes={1: [1], 2: [], 3: []},
-        commitment_prefixes={1: [1, 2], 2: [3], 3: [5]},
+        completed_task_ids=set(),
+        executing_task_ids={},
+        anchors={uid: PlanningAnchor(uid, 2.0, uav.start_pose) for uid, uav in uavs.items()},
+        locked_task_ids={},
+        history={},
     )
     optimizer = RouteOptimizer(RouteEvaluator(EuclideanTravelTimeProvider()), 20, 0.1)
     return state, new_task, optimizer
 
 
-def test_local_preserves_commitment_and_nonaffected_routes() -> None:
+def test_local_changes_only_affected_free_routes() -> None:
     state, new_task, optimizer = _state()
     planner = LocalReplanner(optimizer, h=1)
     result = planner.replan(state, new_task)
     affected = planner.last_affected_uav_ids
     assert len(affected) == 1
     for uav_id in state.uavs:
-        prefix = state.commitment_prefixes[uav_id]
-        assert result.routes[uav_id].task_ids[: len(prefix)] == prefix
         if uav_id not in affected:
             assert result.routes[uav_id].task_ids == state.plan.routes[uav_id].task_ids
+
+
+def test_local_is_never_worse_than_no_reorder_incumbent() -> None:
+    state, new_task, optimizer = _state()
+    incumbent = best_no_reorder_insertion(optimizer, state, new_task)
+    planner = LocalReplanner(optimizer, h=2)
+    planner.replan(state, new_task)
+    assert incumbent.best_uav_id in planner.last_affected_uav_ids
+    assert planner.last_final_objective <= incumbent.objective + 1e-9
 
 
 def test_full_and_local_share_optimizer_components() -> None:
