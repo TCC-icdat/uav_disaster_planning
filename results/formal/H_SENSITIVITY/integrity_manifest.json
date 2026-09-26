@@ -1,0 +1,106 @@
+{
+  "baseline": {
+    "captured_at": "2026-09-26T10:29:45.126555+08:00",
+    "git_commit": "50dc188710ea70ec49c8a93cf5619e058765bb2b",
+    "python": "3.13.5",
+    "pytest_exit_code": 0,
+    "pytest_output": ".............................................................            [100%]",
+    "formal_raw_sha256": {
+      "E1": "90ce8f9469d0c47d1b536b54b169c9f9b98d20874b89891780748a950aa776e0",
+      "E2": "75cd5d083f763064bdbcf9aa59875cf22121dbcb8be7dba3aafe11e15e0c8da8",
+      "E2_v2": "4a62685b89742fb61bbc8cdd841006212a3fb4dde5fd564c52ff0ff12d2e4802",
+      "E3": "3ffddb04e403558ab7131c000eff6526ea033b9e88cfbe051b0cc440d7bbf59c",
+      "E4": "4140284713cba758ab7003f95710f8dcf0a6f76a6410ce4b443e4d40e9adc58d",
+      "E5": "de4e8cc254564ae4e6187307783cd0a713827d234a6f4f6d12ce3b6cbd28e7fb"
+    },
+    "canonical_files_sha256": {
+      "results/canonical/aoi_release_table.csv": "627c6a97e664eab40e3ce00ba69d4ced5847e86918a6c02b5f271a3fcd667b02",
+      "results/canonical/canonical_metrics.json": "6ef3a6e5fa06af8365c6906e3f335416b2a33d344d7490ec90d0a555e49e81a4",
+      "results/canonical/CANONICAL_TIMELINE.md": "cd7897b15e424c029b0febc4f53342e7a9902bc271bdd92cc3fa4a6dfb27cdd8",
+      "results/canonical/figures/canonical_route_diagnostic.png": "272ec8f536fc1a3799bee6ff17d368000b56974d9805365e2e7ffacb42565b1f",
+      "results/canonical/figures/canonical_scene_map.png": "d79f8a149f1060a0f1d40421df4de2e77de8d1d2f900f16868eb515d3c7337ac",
+      "results/canonical/figures/eo_sweep_and_detection.png": "02a7eb47108e6ba2647e4b2048d89c71d03f1325d544cd5a448467c663ad59f2",
+      "results/canonical/figures/sar_service_geometry.png": "1b9d4011ce33120a4225de6610524dd92e8487122f1ca5e492709083c610c2b3",
+      "results/canonical/final/aoi_release_table.csv": "639e20b37c799edc9aa7d1be058b0bd6c021093c073bff8ac2e994717d391bea",
+      "results/canonical/final/canonical_replanning_snapshot.png": "b39377c0f9f7db751c2104450a0e91cd7a0d5a350d43b9d5925d28c43e845031",
+      "results/canonical/final/canonical_safe_metrics.json": "5a23259f98e2e5d4bd22e68587b8b99de61a0fd205c3797e50d47d22142f0d14",
+      "results/canonical/final/canonical_safe_routes.png": "11f0dbe374c95d187fdde4b76fac87a56bfcf9a431420d5512380d3d1134fbd2",
+      "results/canonical/final/CANONICAL_SAFE_TIMELINE.md": "2f426c298f8a46cce5c964a11c7b29b21922d5afc462ac15974bceee80ede108",
+      "results/canonical/final/canonical_scene_final.png": "1ed16f4f99de890bfa92dc8454036d5dcf7be6176bf5640b258637a86ba0d457",
+      "results/canonical/final/eo_safe_sweep_and_detection.png": "2d32e9c9afa17a473c1b38c76a60b6e2d06b099c93ad746062ca878c3b000edd",
+      "results/canonical/final/nfz_intersections.csv": "87b3e8d2fab8126615873883a0f8e520122a3150142c40d5f1c3787e60c12ffe",
+      "results/canonical/final/sar_service_modes_example.png": "ff550877b6589aefc928d5efd922b557811a3cd768e6c1b6143681f4f1ad3cf1",
+      "results/canonical/final/sar_service_table.csv": "7c4c4f97f0307ad2318229c06720ff737930315878915a30856eb72360f67048",
+      "results/canonical/nfz_intersections.csv": "e7b6e2c624f1ce14757ed789de3e4705a546dc88d059cb47665de4d0460b6772",
+      "results/canonical/sar_service_table.csv": "e0362d6537427e9987fe21956813bdedcdc6c60f3f1cb83b980f2ee47f1b8eec"
+    },
+    "canonical_manifest_sha256": "788583680056d5e8283f9fcf34bf1f6a3202824376d1efb41cb12574703ead31",
+    "protected_code_sha256": {
+      "src/uav_planning/planners/local_replanner.py": "65fc94b8b8a2c5746ac7e041007182a27bdc3ac0a4e025f3d7127fd8597acfa4",
+      "src/uav_planning/planners/no_reorder.py": "f4c97416cf7370cda7b09b8b720bf0d128500ec1870333f4cc9e594d1db1578e",
+      "src/uav_planning/planners/full_replanner.py": "e004846e634561c8b526f36c7e14ecd499e74e68bfbe9f00ce96009f51e42367",
+      "src/uav_planning/routing/insertion.py": "7d53d217c29079454d9074f978945e2f9e99c85e8b8bb29b34559ccf2f3d4ab6",
+      "src/uav_planning/routing/evaluator.py": "0a27a3390ba140a0abeceadea945dd1f4d9eb6cd0f73c506c8f7997f39cae2f9",
+      "src/uav_planning/geometry/dubins.py": "dde4ad256269de0bc2bad7e0723cf49de0967bfd177e9ef3372648d4e40fe7d7",
+      "src/uav_planning/simulation/simulator.py": "70307e3ffe375e76d5ca832568237416ac6d7e729eb452e7a562b530cd651ecc",
+      "configs/experiments/e5_scale_template.yaml": "1883e1d27da306be702f8f59d9421d7a09be61d305f1387e85227a4d7f3100a8"
+    }
+  },
+  "post_run": {
+    "checked_at": "2026-09-26T10:31:52.083441+08:00",
+    "git_commit": "50dc188710ea70ec49c8a93cf5619e058765bb2b",
+    "formal_raw_sha256": {
+      "E1": "90ce8f9469d0c47d1b536b54b169c9f9b98d20874b89891780748a950aa776e0",
+      "E2": "75cd5d083f763064bdbcf9aa59875cf22121dbcb8be7dba3aafe11e15e0c8da8",
+      "E2_v2": "4a62685b89742fb61bbc8cdd841006212a3fb4dde5fd564c52ff0ff12d2e4802",
+      "E3": "3ffddb04e403558ab7131c000eff6526ea033b9e88cfbe051b0cc440d7bbf59c",
+      "E4": "4140284713cba758ab7003f95710f8dcf0a6f76a6410ce4b443e4d40e9adc58d",
+      "E5": "de4e8cc254564ae4e6187307783cd0a713827d234a6f4f6d12ce3b6cbd28e7fb"
+    },
+    "canonical_files_sha256": {
+      "results/canonical/aoi_release_table.csv": "627c6a97e664eab40e3ce00ba69d4ced5847e86918a6c02b5f271a3fcd667b02",
+      "results/canonical/canonical_metrics.json": "6ef3a6e5fa06af8365c6906e3f335416b2a33d344d7490ec90d0a555e49e81a4",
+      "results/canonical/CANONICAL_TIMELINE.md": "cd7897b15e424c029b0febc4f53342e7a9902bc271bdd92cc3fa4a6dfb27cdd8",
+      "results/canonical/figures/canonical_route_diagnostic.png": "272ec8f536fc1a3799bee6ff17d368000b56974d9805365e2e7ffacb42565b1f",
+      "results/canonical/figures/canonical_scene_map.png": "d79f8a149f1060a0f1d40421df4de2e77de8d1d2f900f16868eb515d3c7337ac",
+      "results/canonical/figures/eo_sweep_and_detection.png": "02a7eb47108e6ba2647e4b2048d89c71d03f1325d544cd5a448467c663ad59f2",
+      "results/canonical/figures/sar_service_geometry.png": "1b9d4011ce33120a4225de6610524dd92e8487122f1ca5e492709083c610c2b3",
+      "results/canonical/final/aoi_release_table.csv": "639e20b37c799edc9aa7d1be058b0bd6c021093c073bff8ac2e994717d391bea",
+      "results/canonical/final/canonical_replanning_snapshot.png": "b39377c0f9f7db751c2104450a0e91cd7a0d5a350d43b9d5925d28c43e845031",
+      "results/canonical/final/canonical_safe_metrics.json": "5a23259f98e2e5d4bd22e68587b8b99de61a0fd205c3797e50d47d22142f0d14",
+      "results/canonical/final/canonical_safe_routes.png": "11f0dbe374c95d187fdde4b76fac87a56bfcf9a431420d5512380d3d1134fbd2",
+      "results/canonical/final/CANONICAL_SAFE_TIMELINE.md": "2f426c298f8a46cce5c964a11c7b29b21922d5afc462ac15974bceee80ede108",
+      "results/canonical/final/canonical_scene_final.png": "1ed16f4f99de890bfa92dc8454036d5dcf7be6176bf5640b258637a86ba0d457",
+      "results/canonical/final/eo_safe_sweep_and_detection.png": "2d32e9c9afa17a473c1b38c76a60b6e2d06b099c93ad746062ca878c3b000edd",
+      "results/canonical/final/nfz_intersections.csv": "87b3e8d2fab8126615873883a0f8e520122a3150142c40d5f1c3787e60c12ffe",
+      "results/canonical/final/sar_service_modes_example.png": "ff550877b6589aefc928d5efd922b557811a3cd768e6c1b6143681f4f1ad3cf1",
+      "results/canonical/final/sar_service_table.csv": "7c4c4f97f0307ad2318229c06720ff737930315878915a30856eb72360f67048",
+      "results/canonical/nfz_intersections.csv": "e7b6e2c624f1ce14757ed789de3e4705a546dc88d059cb47665de4d0460b6772",
+      "results/canonical/sar_service_table.csv": "e0362d6537427e9987fe21956813bdedcdc6c60f3f1cb83b980f2ee47f1b8eec"
+    },
+    "canonical_manifest_sha256": "788583680056d5e8283f9fcf34bf1f6a3202824376d1efb41cb12574703ead31",
+    "protected_code_sha256": {
+      "src/uav_planning/planners/local_replanner.py": "65fc94b8b8a2c5746ac7e041007182a27bdc3ac0a4e025f3d7127fd8597acfa4",
+      "src/uav_planning/planners/no_reorder.py": "f4c97416cf7370cda7b09b8b720bf0d128500ec1870333f4cc9e594d1db1578e",
+      "src/uav_planning/planners/full_replanner.py": "e004846e634561c8b526f36c7e14ecd499e74e68bfbe9f00ce96009f51e42367",
+      "src/uav_planning/routing/insertion.py": "7d53d217c29079454d9074f978945e2f9e99c85e8b8bb29b34559ccf2f3d4ab6",
+      "src/uav_planning/routing/evaluator.py": "0a27a3390ba140a0abeceadea945dd1f4d9eb6cd0f73c506c8f7997f39cae2f9",
+      "src/uav_planning/geometry/dubins.py": "dde4ad256269de0bc2bad7e0723cf49de0967bfd177e9ef3372648d4e40fe7d7",
+      "src/uav_planning/simulation/simulator.py": "70307e3ffe375e76d5ca832568237416ac6d7e729eb452e7a562b530cd651ecc",
+      "configs/experiments/e5_scale_template.yaml": "1883e1d27da306be702f8f59d9421d7a09be61d305f1387e85227a4d7f3100a8"
+    },
+    "h_sensitivity_raw_sha256": "dcfd082a094e11285e525ae8552ba66085d8c6f1c3b7d4abf8769d4ee9fe06fd",
+    "integrity": {
+      "run_count": 30,
+      "unique_run_count": 30,
+      "paired_seed_count": 10,
+      "feasible_run_count": 30,
+      "time_consistent_run_count": 30,
+      "all_tasks_completed_run_count": 30,
+      "all_uavs_returned_run_count": 30,
+      "new_run_count": 20,
+      "reused_h2_count": 10
+    },
+    "h2_judgement": "A. h=2 是合理折中，建议保留"
+  }
+}

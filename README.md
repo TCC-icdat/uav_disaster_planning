@@ -119,6 +119,15 @@ python scripts/analyze_e5_formal.py --analyze
 
 正式输出位于 `results/formal/E5/`，其中 `E5_FORMAL_REPORT.md` 给出十节验收结论，`integrity_manifest.json` 保存 E1–E4、Canonical 和冻结核心文件的前后哈希。
 
+Local 参数 `h` 的轻量敏感性实验已在 E5 Medium 的相同 10 个 paired seeds 上完成。`h=1/2/3` 共 30 条记录，其中 `h=2` 的 10 条记录直接复用 E5 Medium，未重跑 E5；NoReorder 与 Full 仅作为冻结参考线。运行、续跑和分析使用：
+
+```bash
+python scripts/run_h_sensitivity.py --run --resume
+python scripts/run_h_sensitivity.py --analyze
+```
+
+输出位于 `results/formal/H_SENSITIVITY/`。本轮数据支持将 `h=2` 保留为质量、计算时间和计划扰动之间的代表性折中，但不解释为全局最优或所有指标最优。
+
 Dubins 公式采用标准六路径族解析构造。实现依据为 A. M. Shkel and V. Lumelsky, “Classification of the Dubins set,” *Robotics and Autonomous Systems*, 2001；代码为本项目独立的长度计算实现，未引入第三方 Dubins C 扩展。
 
 ## 结果解释边界
